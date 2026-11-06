@@ -1,7 +1,7 @@
 """
 Worker Agent 1 — Data Characterization Agent (ENHANCED)
 
-DR_Template Section: Prerequisite for all of Section 1.
+DR_Template Section: Prerequisite for all of Section 1 — see docs/DR_Template.md.
 Enhanced for Novel Algorithm Generation:
   - Analyzes HD dataset's geometry, density, class imbalance
   - Recommends preprocessing

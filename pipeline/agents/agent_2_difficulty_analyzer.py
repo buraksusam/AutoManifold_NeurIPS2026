@@ -1,7 +1,7 @@
 """
 Worker Agent 2 — Embedding Difficulty Analyzer Agent (ENHANCED)
 
-DR_Template Section 1.1: Identify Embedding Difficulty Level.
+DR_Template Section 1.1: Identify Embedding Difficulty Level — see docs/DR_Template.md.
 Enhanced for Novel Algorithm Generation:
   - Divides data into ~100-point patches
   - Runs t-SNE/UMAP per patch

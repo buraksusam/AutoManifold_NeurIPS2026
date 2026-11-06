@@ -11,7 +11,7 @@ default parameters, then asks the LLM to produce:
   - A numbered pseudocode listing
   - A short narrative summary
 
-Used by all three planner modes: ablation, novel/novelv2, all_llm.
+Used by the algorithm-design modes: AutoManifold, NoSkel-Agents and SingleLLM.
 """
 
 from __future__ import annotations

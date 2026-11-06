@@ -1,6 +1,6 @@
 import time
 import pytest
-from pipeline.planner_novel import _time_limit, EmbeddingTimeout
+from pipeline.planner_automanifold import _time_limit, EmbeddingTimeout
 
 
 def test_time_limit_aborts_slow_block():

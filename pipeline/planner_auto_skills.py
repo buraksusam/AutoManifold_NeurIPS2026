@@ -1,8 +1,7 @@
-"""NovelV2SkillsPlanner — Skills Mode v2 autonomous LLM agent loop.
+"""AutoSkillsPlanner — Auto-Skills: autonomous LLM agent loop over skills.
 
-The previous version of this planner ran a deterministic phase-by-phase
-orchestrator that loaded markdown skills sequentially. This version exposes
-both skills (each `SKILL.md` becomes one tool) and deterministic compute
+Exposes both skills (each ``pipeline/skills/auto_skills/*/SKILL.md`` becomes
+one tool, orchestrated by ``PLANNER.md``) and deterministic compute
 helpers (baselines, PCA, neighborhood grid, code execution, distortion
 metrics) AS TOOLS. The LLM autonomously decides which tool to call, in what
 order, based on the planner prompt's workflow philosophy.
@@ -42,25 +41,24 @@ from .visualizations import (
 
 logger = logging.getLogger(__name__)
 
-SKILLS_DIR = os.path.join(os.path.dirname(__file__), "skills", "novelv2")
+SKILLS_DIR = os.path.join(os.path.dirname(__file__), "skills", "auto_skills")
 PLANNER_PROMPT_PATH = os.path.join(SKILLS_DIR, "PLANNER.md")
 
 
-class NovelV2SkillsPlanner:
-    """Skills Mode v2 — autonomous LLM agent loop with tool-calling.
+class AutoSkillsPlanner:
+    """Auto-Skills — autonomous LLM agent loop with tool-calling.
 
-    Stands alone from :class:`NovelPlanner`: every deterministic helper used
-    by the previous planner is now exposed as a compute tool and dispatched
-    via the agent loop instead.
+    Stands alone from :class:`AutoManifoldPlanner`: its deterministic helpers
+    are exposed as compute tools and dispatched via the agent loop.
     """
 
     def __init__(self, config: PipelineConfig) -> None:
         self.config = config
         self.llm = LLMClient(config.llm)
-        self.mode_name = "novelv2_skills"
+        self.mode_name = "auto_skills"
         self.template_name = "DR_Template_v2"
 
-        # Skills Mode defaults to high-effort thinking when not otherwise set.
+        # Auto-Skills defaults to high-effort thinking when not otherwise set.
         if not getattr(self.config.llm, "reasoning_effort", None):
             self.config.llm.reasoning_effort = "high"
 
@@ -149,7 +147,7 @@ class NovelV2SkillsPlanner:
             for atp in state.code_attempts
         ]
 
-        # Post-finalize: render the same plots + metrics tables NovelPlanner
+        # Post-finalize: render the same plots + metrics tables AutoManifoldPlanner
         # produces. Without this, the agent loop ends with only a JSON report
         # — no visual artifacts. Wrapped in try/except so a plotting failure
         # never loses the JSON report.
@@ -168,7 +166,7 @@ class NovelV2SkillsPlanner:
             logger.exception("Final visualization phase failed: %s", exc)
             final_report.setdefault("visualizations", {})["error"] = str(exc)
 
-        report_path = os.path.join(output_dir, "final_novelv2_skills_report.json")
+        report_path = os.path.join(output_dir, "final_auto_skills_report.json")
         with open(report_path, "w") as f:
             json.dump(final_report, f, indent=2, default=str)
         logger.info("Final report saved → %s", report_path)
@@ -187,7 +185,7 @@ class NovelV2SkillsPlanner:
         label_names: Optional[Dict[int, str]],
         output_dir: str,
     ) -> Dict[str, Any]:
-        """Render the same artifacts NovelPlanner produces post-finalize:
+        """Render the same artifacts AutoManifoldPlanner produces post-finalize:
         final scatter, distortion heatmap, per-class summary, dendrogram
         comparison, hierarchy change detail, optional highlighted areas, and
         the metrics comparison table + bars vs baselines.
@@ -328,9 +326,9 @@ class NovelV2SkillsPlanner:
 
         # 7. Metrics comparison vs baselines (table + bars + side-by-side scatter).
         try:
-            from .planner_novel import NovelPlanner
+            from .planner_automanifold import AutoManifoldPlanner
 
-            delegate = NovelPlanner(self.config)
+            delegate = AutoManifoldPlanner(self.config)
             delegate.output_dir = output_dir
             novel_metrics = self.metrics_engine.compute_all(
                 hd_data=data, ld_data=embedding, labels=labels,
@@ -344,9 +342,9 @@ class NovelV2SkillsPlanner:
                 novel_embedding=embedding,
                 novel_metrics=novel_metrics,
                 algo_name=algo_name,
-                output_prefix="novelv2_skills",
+                output_prefix="auto_skills",
                 comparison_title=f"{algo_name} vs Baselines",
-                metrics_plot_title="Metrics Comparison — NovelV2-Skills vs Baselines",
+                metrics_plot_title="Metrics Comparison — Auto-Skills vs Baselines",
                 metrics_json_label=algo_name,
             )
             artifacts["metrics_comparison"] = {

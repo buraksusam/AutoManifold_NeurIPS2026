@@ -1,9 +1,10 @@
 """
 Worker Agent 6 — Hyperparameter Optimization Agent
 
-DR_Template Section 2.3 + Paper core methodology.
-Implements the paper's iterative LLM-guided pipeline with dual
-implicit/explicit scoring and chain-of-thought diagnostics.
+DR_Template Section 2.3 (docs/DR_Template.md) + the iterative refinement
+methodology of "Explainable Iterative Data Visualisation Refinement via an
+LLM Agent" (Susam & Mu, IEEE CG&A 2026): an iterative LLM-guided pipeline
+with dual implicit/explicit scoring and chain-of-thought diagnostics.
 """
 
 import json

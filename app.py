@@ -26,6 +26,7 @@ except Exception:
 
 import argparse
 import asyncio
+import importlib
 import json
 import logging
 import queue
@@ -57,6 +58,15 @@ os.makedirs(OUTPUT_ROOT, exist_ok=True)
 # ---------------------------------------------------------------------------
 
 runs: Dict[str, Dict[str, Any]] = {}
+
+# Pipeline modes: key -> (module, planner class, display name)
+MODES: Dict[str, tuple] = {
+    "optimization":  ("pipeline.planner",               "Planner",             "Optimization"),
+    "automanifold":  ("pipeline.planner_automanifold",  "AutoManifoldPlanner", "AutoManifold"),
+    "noskel_agents": ("pipeline.planner_noskel_agents", "NoSkelAgentsPlanner", "NoSkel-Agents"),
+    "auto_skills":   ("pipeline.planner_auto_skills",   "AutoSkillsPlanner",   "Auto-Skills"),
+    "singlellm":     ("pipeline.planner_singlellm",     "SingleLLMPlanner",    "SingleLLM"),
+}
 
 
 def _make_run_id(experiment_name: Optional[str]) -> str:
@@ -141,12 +151,12 @@ def _run_pipeline(
 ) -> None:
     """Runs in a daemon thread; writes structured events into runs[run_id]['q'].
 
-    Supports multiple modes:
-    - 'optimization': Original Planner for hyperparameter optimization
-    - 'novel': NovelPlanner for generating novel DR algorithms
-    - 'novelv2': NovelPlannerV2 with DR_Template_v2 synthesis constraints
-    - 'all_llm': AllLLMPlanner for unconstrained algorithm design
-    - 'allLLMv2': AllLLMPlannerV2 with DR_Template_v2 design/synthesis constraints
+    Modes (see MODES):
+    - 'optimization':  Planner — LLM-guided hyperparameter tuning of t-SNE/UMAP/PaCMAP/PCA
+    - 'automanifold':  AutoManifoldPlanner — template-based composition of primitives
+    - 'noskel_agents': NoSkelAgentsPlanner — skeleton-free multi-agent design
+    - 'auto_skills':   AutoSkillsPlanner — autonomous agent loop over skills
+    - 'singlellm':     SingleLLMPlanner — single blank-prompt LLM baseline
     """
     run = runs[run_id]
     q: queue.Queue = run["q"]
@@ -176,57 +186,16 @@ def _run_pipeline(
         )
 
         # Import the appropriate planner based on mode
-        if mode == "novel":
-            from pipeline.planner_novel import NovelPlanner
-            PlannerClass = NovelPlanner
-            q.put({"type": "log", "data": {"line": "Using Novel Algorithm Generation Planner", "level": "info"}})
-        elif mode == "novelv2":
-            from pipeline.planner_novel_v2 import NovelPlannerV2
-            PlannerClass = NovelPlannerV2
-            q.put({"type": "log", "data": {"line": "Using Novel Algorithm Generation Planner v2 (DR_Template_v2)", "level": "info"}})
-        elif mode == "novelv2_skills":
-            from pipeline.planner_novelv2_skills import NovelV2SkillsPlanner
-            PlannerClass = NovelV2SkillsPlanner
-            q.put({"type": "log", "data": {"line": "Using Skills Mode (novelv2 deterministic workflow, single LLM context)", "level": "info"}})
-        elif mode == "all_llm":
-            from pipeline.planner_all_llm import AllLLMPlanner
-            PlannerClass = AllLLMPlanner
-            q.put({"type": "log", "data": {"line": "Using All LLM Algorithm Design Planner (unconstrained)", "level": "info"}})
-        elif mode == "allLLMv2":
-            from pipeline.planner_all_llm_v2 import AllLLMPlannerV2
-            PlannerClass = AllLLMPlannerV2
-            q.put({"type": "log", "data": {"line": "Using All LLM Algorithm Design Planner v2 (DR_Template_v2)", "level": "info"}})
-        elif mode == "ablation":
-            from pipeline.planner_ablation import AblationPlanner
-            PlannerClass = AblationPlanner
-            q.put({"type": "log", "data": {"line": "Using Ablation Planner (single-LLM blank prompt)", "level": "info"}})
-        else:
-            from pipeline.planner import Planner
-            PlannerClass = Planner
-            q.put({"type": "log", "data": {"line": "Using Standard Optimization Planner", "level": "info"}})
-
-        config = PipelineConfig(
-            llm=LLMConfig(
-                provider=cfg["provider"],
-                model=cfg["model"],
-                api_key=cfg["api_key"],
-                temperature=0.4,
-            ),
-            convergence=ConvergenceConfig(
-                max_iterations=cfg["max_iter"],
-                quality_score_target=cfg["quality_target"],
-                enable_iterative_optimization=cfg.get("iterative_optimization", True),
-            ),
-            patch=PatchConfig(),
-            metrics=MetricsConfig(),
-            default_dr_method=cfg["dr_method"],
-            primary_goal=cfg.get("primary_goal", "balance both"),
-        )
+        if mode not in MODES:
+            raise ValueError(f"Unknown mode {mode!r}; expected one of {sorted(MODES)}")
+        module_name, class_name, display_name = MODES[mode]
+        PlannerClass = getattr(importlib.import_module(module_name), class_name)
+        q.put({"type": "log", "data": {"line": f"Using {display_name} planner", "level": "info"}})
 
         planner = PlannerClass(config)
 
-        # Skills mode: stream per-skill-turn breadcrumbs to the UI log
-        if mode == "novelv2_skills":
+        # Auto-Skills: stream per-skill-turn breadcrumbs to the UI log
+        if mode == "auto_skills":
             def _skill_log(line: str, level: str = "info"):
                 q.put({"type": "log", "data": {"line": line, "level": level}})
             planner.skill_log_callback = _skill_log
@@ -347,7 +316,7 @@ def _check_new_files(output_dir: str, seen: set, run_id: str) -> List[dict]:
             "optimization_history.json": ("history", ""),
             "final_report.json": ("report", "Final Report"),
         }
-        # Novel algorithm planner agents
+        # AutoManifold planner agents
         AGENT_MAP_NOVEL = {
             "agent1_data_characterization.json": ("1", "Data Characterisation"),
             "agent2_difficulty_primitive_mapping.json": ("2", "Difficulty & Primitive Mapping"),
@@ -360,27 +329,27 @@ def _check_new_files(output_dir: str, seen: set, run_id: str) -> List[dict]:
             "novel_comparison.json": ("novel_cmp", "Novel vs Baselines Comparison"),
             "final_novel_algorithm_report.json": ("report", "Novel Algorithm Report"),
         }
-        # All LLM planner agents
-        AGENT_MAP_ALL_LLM = {
-            "all_llm_algorithm_spec.json": ("design", "Algorithm Design Spec"),
-            "all_llm_design_session.json": ("design_session", "Design Session Transcript"),
+        # NoSkel-Agents planner files
+        AGENT_MAP_NOSKEL = {
+            "noskel_algorithm_spec.json": ("design", "Algorithm Design Spec"),
+            "noskel_design_session.json": ("design_session", "Design Session Transcript"),
             "agent8_final_synthesis.json": ("8f", "Code Synthesis"),
-            "all_llm_metrics.json": ("all_llm_metrics", "All LLM Algorithm Metrics"),
-            "all_llm_comparison.json": ("all_llm_cmp", "All LLM vs Baselines Comparison"),
-            "final_all_llm_report.json": ("report", "Final Report"),
+            "noskel_metrics.json": ("noskel_metrics", "NoSkel-Agents Algorithm Metrics"),
+            "noskel_comparison.json": ("noskel_cmp", "NoSkel-Agents vs Baselines Comparison"),
+            "final_noskel_report.json": ("report", "Final Report"),
         }
-        # Ablation planner files
-        AGENT_MAP_ABLATION = {
-            "ablation_design.json": ("design", "Blank-Prompt Algorithm Design"),
-            "ablation_comparison.json": ("ablation_cmp", "Ablation vs Baselines Comparison"),
-            "final_ablation_report.json": ("report", "Final Report"),
+        # SingleLLM planner files
+        AGENT_MAP_SINGLELLM = {
+            "singlellm_design.json": ("design", "Blank-Prompt Algorithm Design"),
+            "singlellm_comparison.json": ("singlellm_cmp", "SingleLLM vs Baselines Comparison"),
+            "final_singlellm_report.json": ("report", "Final Report"),
         }
-        # NovelV2 Skills planner files (per-agent files reuse AGENT_MAP_NOVEL)
-        AGENT_MAP_NOVELV2_SKILLS = {
-            "final_novelv2_skills_report.json": ("report", "Final Report"),
+        # Auto-Skills planner files (per-agent files reuse AGENT_MAP_NOVEL)
+        AGENT_MAP_AUTO_SKILLS = {
+            "final_auto_skills_report.json": ("report", "Final Report"),
         }
         # Combined map
-        AGENT_MAP = {**AGENT_MAP_OPT, **AGENT_MAP_NOVEL, **AGENT_MAP_ALL_LLM, **AGENT_MAP_ABLATION, **AGENT_MAP_NOVELV2_SKILLS}
+        AGENT_MAP = {**AGENT_MAP_OPT, **AGENT_MAP_NOVEL, **AGENT_MAP_NOSKEL, **AGENT_MAP_SINGLELLM, **AGENT_MAP_AUTO_SKILLS}
         # Skill tracking files
         SKILL_LOG_PATTERN = r"_skills\.json$"
         if fname in AGENT_MAP:
@@ -413,17 +382,17 @@ def _check_new_files(output_dir: str, seen: set, run_id: str) -> List[dict]:
             # Optimize-mode comparison plots
             "default_params_embedding.png": "Default Parameters Embedding",
             "default_vs_best_comparison.png": "Default vs Best Comparison",
-            # Novel planner Phase 6 plots
+            # AutoManifold Phase 6 plots
             "novel_embedding.png": "Novel Algorithm Embedding",
             "novel_comparison.png": "Novel vs Baselines",
             "novel_metrics_table.png": "Metrics Comparison Table",
             "novel_metrics_bars.png": "Metrics Bar Chart",
-            "all_llm_comparison.png": "All LLM vs Baselines",
-            "all_llm_metrics_table.png": "Metrics Comparison Table",
-            "all_llm_metrics_bars.png": "Metrics Bar Chart",
-            "ablation_comparison.png": "Ablation vs Baselines",
-            "ablation_metrics_table.png": "Metrics Comparison Table",
-            "ablation_metrics_bars.png": "Metrics Bar Chart",
+            "noskel_comparison.png": "NoSkel-Agents vs Baselines",
+            "noskel_metrics_table.png": "Metrics Comparison Table",
+            "noskel_metrics_bars.png": "Metrics Bar Chart",
+            "singlellm_comparison.png": "SingleLLM vs Baselines",
+            "singlellm_metrics_table.png": "Metrics Comparison Table",
+            "singlellm_metrics_bars.png": "Metrics Bar Chart",
         }
         if fname in PHASE_PLOTS:
             events.append({"type": "phase_plot", "data": {
@@ -441,7 +410,7 @@ def _check_new_files(output_dir: str, seen: set, run_id: str) -> List[dict]:
             except Exception:
                 pass
 
-    # --- Per-turn skill artifacts (Skills Mode) ---
+    # --- Per-turn skill artifacts (Auto-Skills) ---
     skill_turns_dir = os.path.join(output_dir, "skill_turns")
     if os.path.isdir(skill_turns_dir):
         for fn in sorted(os.listdir(skill_turns_dir)):
@@ -550,7 +519,7 @@ async def api_start(
     model: str = Form("gemini-3.1-pro-preview"),
     api_key: str = Form(""),
     experiment_name: str = Form(""),
-    mode: str = Form("optimization"),  # 'optimization' or 'novel'
+    mode: str = Form("optimization"),  # a key of MODES
     dr_method: str = Form("tsne"),
     max_iter: int = Form(10),
     quality_target: float = Form(9.0),
@@ -559,6 +528,9 @@ async def api_start(
     data_file: Optional[UploadFile] = File(None),
     labels_file: Optional[UploadFile] = File(None),
 ):
+    if mode not in MODES:
+        raise HTTPException(400, f"Unknown mode {mode!r}; expected one of {sorted(MODES)}")
+
     # Resolve API key
     if not api_key:
         api_key = os.environ.get({
@@ -640,7 +612,7 @@ async def api_start(
     cfg = {
         "provider": provider, "model": model, "api_key": api_key,
         "experiment_name": experiment_name.strip(),
-        "mode": mode,  # 'optimization' or 'novel'
+        "mode": mode,
         "dr_method": dr_method, "max_iter": max_iter,
         "quality_target": quality_target, "primary_goal": primary_goal,
         "iterative_optimization": iterative_optimization,
@@ -721,7 +693,7 @@ async def api_run_snapshot(run_id: str):
             '4A': 4, '5C': 5,  # Novel planner agents
             '8i': 6, '8f': 8, '9': 9,
             'novel_metrics': 10, 'novel_cmp': 11,  # Novel planner results
-            'all_llm_metrics': 12, 'all_llm_cmp': 13,
+            'noskel_metrics': 12, 'noskel_cmp': 13,
         }
         PHASE_PLOT_ORDER = {
             'phase1_data_overview': 1,
@@ -732,8 +704,8 @@ async def api_run_snapshot(run_id: str):
             'phase6_hierarchy_changes': 9,
             # Novel planner Phase 6
             'novel_embedding': 10, 'novel_comparison': 11,
-            'all_llm_comparison': 12, 'all_llm_metrics_table': 13,
-            'all_llm_metrics_bars': 14,
+            'noskel_comparison': 12, 'noskel_metrics_table': 13,
+            'noskel_metrics_bars': 14,
         }
 
         def sort_key(ev):

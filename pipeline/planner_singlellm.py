@@ -1,16 +1,16 @@
 """
-AblationPlanner — single-LLM blank-prompt baseline.
+SingleLLMPlanner — SingleLLM: single-LLM blank-prompt baseline.
 
-Ablation-mode sanity check: one LLM call, zero data context, zero planning
+One LLM call, zero data context, zero planning
 agents. The model is simply asked to design a novel dimensionality-reduction
 algorithm and return runnable Python. We then take that code and hand it to our
 existing evaluation machinery (metrics engine, baseline comparison, visual
-forensics) so the output is directly comparable against NovelPlanner runs.
+forensics) so the output is directly comparable against AutoManifoldPlanner runs.
 
 Phases:
   1. Blank-Prompt Design   — one LLM call, no data fed in
   2. Implementation        — validate + Agent 10 recovery (inherited)
-  3. Single-shot Embed     — inherited from NovelPlanner
+  3. Single-shot Embed     — inherited from AutoManifoldPlanner
   4. Baseline Comparison   — inherited
   5. Visual Forensics      — inherited (Agent 9)
 """
@@ -26,7 +26,7 @@ import numpy as np
 
 from .base_agent import BaseAgent
 from .config import OUTPUT_ROOT, PipelineConfig
-from .planner_novel import NovelPlanner
+from .planner_automanifold import AutoManifoldPlanner
 
 logger = logging.getLogger(__name__)
 
@@ -108,13 +108,13 @@ def _build_blank_prompt(primary_goal: str) -> str:
     )
 
 
-class AblationPlanner(NovelPlanner):
-    """Single-LLM ablation baseline; reuses NovelPlanner's execution + evaluation."""
+class SingleLLMPlanner(AutoManifoldPlanner):
+    """SingleLLM baseline; reuses AutoManifoldPlanner's execution + evaluation."""
 
     def __init__(self, config: PipelineConfig):
         super().__init__(config)
-        self.mode_name = "ablation"
-        self.template_name = "Ablation_Blank_Prompt"
+        self.mode_name = "singlellm"
+        self.template_name = "SingleLLM_Blank_Prompt"
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -150,7 +150,7 @@ class AblationPlanner(NovelPlanner):
         self._stage("🔧", "PHASE 2 — Implementation & Recovery")
         impl = self._phase2_implement(data, labels, design)
 
-        algo_name = impl.get("algo_name", "Ablation Algorithm")
+        algo_name = impl.get("algo_name", "SingleLLM Algorithm")
         self._novel_algo_name = algo_name
 
         # Phase 2b — Mathematical Representation & Pseudocode
@@ -160,10 +160,10 @@ class AblationPlanner(NovelPlanner):
             code_str=impl.get("code", "") if not impl.get("used_fallback") else "",
             default_params=impl.get("params", {}),
             description=design.get("brief_description", ""),
-            output_prefix="ablation",
+            output_prefix="singlellm",
         )
 
-        # Phase 3 — single-shot embed (always single-shot for ablation)
+        # Phase 3 — single-shot embed (always single-shot for SingleLLM)
         if impl.get("used_fallback"):
             embedding = impl["embedding"]
             metrics = self.metrics_engine.compute_all(
@@ -189,12 +189,12 @@ class AblationPlanner(NovelPlanner):
         best_metrics = self.best_result["metrics"] if self.best_result else {}
         comparison = self._compare_with_baselines(
             data, labels, label_names, embedding, best_metrics, algo_name,
-            output_prefix="ablation",
-            comparison_title="Ablation Algorithm vs Baselines",
-            metrics_plot_title="Metrics Comparison — Ablation vs Baselines",
-            metrics_json_label="Ablation Algorithm",
+            output_prefix="singlellm",
+            comparison_title="SingleLLM Algorithm vs Baselines",
+            metrics_plot_title="Metrics Comparison — SingleLLM vs Baselines",
+            metrics_json_label="SingleLLM Algorithm",
         )
-        self._save_json("ablation_comparison.json", comparison)
+        self._save_json("singlellm_comparison.json", comparison)
 
         # Phase 5 — visual forensics
         self._stage("🔬", "PHASE 5 — Visual Forensics")
@@ -202,7 +202,7 @@ class AblationPlanner(NovelPlanner):
         try:
             vi_result = self._phase7_visual_forensics(data, labels, label_names)
         except Exception as exc:
-            logger.warning("Ablation visual forensics failed: %s", exc)
+            logger.warning("SingleLLM visual forensics failed: %s", exc)
 
         final = {
             "mode": self.mode_name,
@@ -214,10 +214,10 @@ class AblationPlanner(NovelPlanner):
             "baseline_comparison": comparison,
             "visual_forensics": vi_result,
         }
-        report_path = os.path.join(output_dir, "final_ablation_report.json")
+        report_path = os.path.join(output_dir, "final_singlellm_report.json")
         with open(report_path, "w") as f:
             json.dump(final, f, indent=2, default=str)
-        logger.info("Final ablation report saved → %s", report_path)
+        logger.info("Final SingleLLM report saved → %s", report_path)
         return final
 
     # ------------------------------------------------------------------
@@ -249,7 +249,7 @@ class AblationPlanner(NovelPlanner):
             parsed = BaseAgent._parse_json(raw) or {}
 
         design = {
-            "algorithm_name": parsed.get("algorithm_name", "Ablation Algorithm"),
+            "algorithm_name": parsed.get("algorithm_name", "SingleLLM Algorithm"),
             "brief_description": parsed.get("brief_description", ""),
             "custom_embedding_code": parsed.get("custom_embedding_code", ""),
             "default_params": parsed.get("default_params", {}) or {},
@@ -257,7 +257,7 @@ class AblationPlanner(NovelPlanner):
             "prompt": user_prompt,
             "_raw_llm_output": raw[:8000] if isinstance(raw, str) else "",
         }
-        self._save_json("ablation_design.json", design)
+        self._save_json("singlellm_design.json", design)
 
         name = design["algorithm_name"]
         print(f"  → Algorithm: {name}", flush=True)
@@ -278,7 +278,7 @@ class AblationPlanner(NovelPlanner):
     ) -> Dict[str, Any]:
         code_str = design.get("custom_embedding_code", "")
         default_params = design.get("default_params", {}) or {}
-        algo_name = design.get("algorithm_name", "Ablation Algorithm")
+        algo_name = design.get("algorithm_name", "SingleLLM Algorithm")
         result: Dict[str, Any] = {
             "algorithm_name": algo_name,
             "success": False,
@@ -296,9 +296,9 @@ class AblationPlanner(NovelPlanner):
             })
             return result
 
-        code_path = os.path.join(self.output_dir, "ablation_algorithm.py")
+        code_path = os.path.join(self.output_dir, "singlellm_algorithm.py")
         with open(code_path, "w") as f:
-            f.write(f"# {algo_name}\n# Generated by Ablation (single-LLM blank-prompt) pipeline\n\n")
+            f.write(f"# {algo_name}\n# Generated by the SingleLLM (blank-prompt) pipeline\n\n")
             f.write(code_str)
         print(f"  → Code saved: {code_path}", flush=True)
 
@@ -314,7 +314,7 @@ class AblationPlanner(NovelPlanner):
             if recovery_ok:
                 code_str = fixed_code
                 default_params = fixed_params
-                rec_path = os.path.join(self.output_dir, "ablation_algorithm_recovered.py")
+                rec_path = os.path.join(self.output_dir, "singlellm_algorithm_recovered.py")
                 with open(rec_path, "w") as f:
                     f.write(f"# Recovered from error: {test_msg[:200]}\n\n")
                     f.write(code_str)

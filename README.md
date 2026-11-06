@@ -33,15 +33,17 @@ python serve.py --open          # http://localhost:8000
 Choose a dataset (built-in or uploaded CSV), an LLM provider/model, an
 optimisation goal and a pipeline mode:
 
-| Mode | Description |
-|------|-------------|
-| `optimization` | Tune an existing method (t-SNE / UMAP / PaCMAP / PCA) with LLM-guided iterative refinement |
-| `novel` | Generate a novel DR algorithm by composing algorithmic primitives (affinity, cost, optimiser) |
-| `novelv2` | `novel` with DR_Template_v2 synthesis constraints |
-| `novelv2_skills` | `novelv2` deterministic stages driven by a single LLM context via skills |
-| `all_llm` | Unconstrained, blank-canvas algorithm design by the LLM |
-| `allLLMv2` | `all_llm` with DR_Template_v2 design/synthesis constraints |
-| `ablation` | Single-LLM blank prompt baseline (no agents) |
+| Mode (key) | Planner | Description |
+|------------|---------|-------------|
+| **AutoManifold** (`automanifold`) | `AutoManifoldPlanner` | Specialised agents characterise the data, analyse embedding difficulty and neighbourhoods, design affinity and cost components from a primitive library, and synthesise, validate and refine a novel algorithm (DR_Template + DR_Template_v2) |
+| **NoSkel-Agents** (`noskel_agents`) | `NoSkelAgentsPlanner` | Skeleton-free design: a designer agent builds the algorithm from a blank canvas, spawning analysis sub-agents on demand (DR_Template_v2 constraints, no primitive skeleton) |
+| **Auto-Skills** (`auto_skills`) | `AutoSkillsPlanner` | One autonomous LLM agent drives the design by calling skills (`pipeline/skills/auto_skills/`) and deterministic compute tools |
+| **SingleLLM** (`singlellm`) | `SingleLLMPlanner` | Baseline: a single blank-prompt LLM call produces the whole algorithm; no agents, no data context |
+| **Optimization** (`optimization`) | `Planner` | Tune an existing method (t-SNE / UMAP / PaCMAP / PCA) with LLM-guided iterative refinement |
+
+All algorithm-design modes share the same execution, evaluation (baseline
+comparison, metrics) and visual-forensics stages, so their results are directly
+comparable.
 
 ### Command line (optimisation mode)
 
@@ -59,6 +61,24 @@ Each run writes its artifacts (agent reports, plots, metrics, the synthesised
 algorithm code, embeddings) to `outputs/<run_id>/`. Uploaded files go to
 `uploads/`. Both locations can be changed with `AUTOMANIFOLD_OUTPUT_DIR` and
 `AUTOMANIFOLD_UPLOAD_DIR`.
+
+## Design documents
+
+The agent prompts are derived from two design templates, included in `docs/`:
+
+| Document | Defines | Used by |
+|----------|---------|---------|
+| [`docs/DR_Template.md`](docs/DR_Template.md) | Auxiliary analysis tasks (§1.1 difficulty levels, §1.2 maximal embeddable neighbourhoods, §1.3 patch stitching, §1.4 impossible-to-embed points) and implementation strategies (§2.1 data feeding, §2.2 fine-tuning, §2.3 hyperparameter optimisation) | Agents 1–3 and 6 (AutoManifold, NoSkel-Agents' data characterisation, Optimization); Agents 4–5 patch stitching / outliers (Optimization); Agent 8 strategy options; Auto-Skills skills `map-difficulty-to-primitives`, `estimate-neighborhoods` |
+| [`docs/DR_Template_v2.md`](docs/DR_Template_v2.md) | Synthesis and design constraints: verified-code reuse, dynamic-code scope, score plan, hyperparameter-selection policy | Agent 8 synthesis (AutoManifold, NoSkel-Agents); NoSkel-Agents designer; Auto-Skills `synthesize-algorithm` skill |
+
+Module docstrings point to the relevant section, e.g.
+`pipeline/agents/agent_2_difficulty_analyzer.py` → DR_Template §1.1.
+
+The hyperparameter-optimisation loop (Agent 6) follows the iterative
+refinement methodology of *Explainable Iterative Data Visualisation Refinement
+via an LLM Agent* (Susam & Mu, IEEE CG&A 2026). The Auto-Skills planner prompt
+and skill definitions live in `pipeline/skills/auto_skills/` (`PLANNER.md`,
+`*/SKILL.md`).
 
 ## Datasets
 
@@ -99,15 +119,20 @@ pipeline/
 ├── agents/        # specialised worker agents (data characterisation, difficulty,
 │                  #   neighbourhoods, affinity/cost design, synthesis, evaluation, ...)
 ├── engines/       # DR, clustering and metrics engines
-├── skills/        # skill definitions for the skills-driven mode
-├── tools/         # tool registry for the agentic loop
-├── planner*.py    # orchestrators for each pipeline mode
+├── skills/        # Auto-Skills planner prompt + skill definitions
+├── tools/         # tool registry for the Auto-Skills agent loop
+├── planner_automanifold.py   # AutoManifold (base class for NoSkel-Agents, SingleLLM)
+├── planner_noskel_agents.py  # NoSkel-Agents
+├── planner_auto_skills.py    # Auto-Skills
+├── planner_singlellm.py      # SingleLLM
+├── planner.py     # Optimization
 ├── datasets.py    # dataset registry and loaders
 └── config.py      # LLM / pipeline configuration
 app.py             # FastAPI backend for the web UI
 frontend/          # web UI
 main.py            # CLI entry point
 serve.py           # web UI launcher
+docs/              # DR_Template.md, DR_Template_v2.md
 tests/
 ```
 

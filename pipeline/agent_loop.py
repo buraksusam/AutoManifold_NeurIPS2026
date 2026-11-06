@@ -1,4 +1,4 @@
-"""AgentLoop — autonomous LLM agent loop for Skills Mode v2.
+"""AgentLoop — autonomous LLM agent loop for Auto-Skills.
 
 Drives a single LLM conversation through the planner prompt + a registry of
 tools (skills + compute tools + finalize). Termination is triggered by the

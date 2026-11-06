@@ -7,7 +7,7 @@ from pipeline.tools.skill_tools import load_skills_from_dir
 
 SKILLS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(__file__)),
-    "pipeline", "skills", "novelv2",
+    "pipeline", "skills", "auto_skills",
 )
 
 

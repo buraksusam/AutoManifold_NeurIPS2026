@@ -1,7 +1,7 @@
 """
 Worker Agent 4 — Patch Stitching Designer Agent
 
-DR_Template Section 1.3: Design Local Patch Stitching Algorithm.
+DR_Template Section 1.3: Design Local Patch Stitching Algorithm — see docs/DR_Template.md.
 Designs methods to assemble locally-embedded patches into a globally
 consistent embedding (position, rotation, reflection, scale).
 Prioritises reuse of existing mathematical solutions.

@@ -251,7 +251,7 @@ select:focus, input:focus {
 .log-line.agent .log-text { color: #ffb070; }
 .log-empty { color: var(--term-dim); font-style: italic; padding: 8px 0; }
 
-/* ── Skill streaming pane (Skills Mode) ────────────────────── */
+/* ── Skill streaming pane (Auto-Skills) ────────────────────── */
 #skill-stream-box {
   background: #0e1620; border-bottom: 1px solid var(--border);
   max-height: 40%; display: flex; flex-direction: column;
@@ -565,16 +565,14 @@ select:focus, input:focus {
         <div class="form-group">
           <label for="mode-select">Pipeline Mode</label>
           <select id="mode-select" onchange="toggleDRMethodGroup()">
-            <option value="optimization">Standard Optimization (tune existing methods)</option>
-            <option value="novel">Novel Algorithm Generation (compose new methods)</option>
-            <option value="novelv2">Novel Algorithm Generation v2 (DR_Template_v2)</option>
-            <option value="all_llm">All LLM Algorithm Design (unconstrained)</option>
-            <option value="novelv2_skills">Skills Mode (novelv2 deterministic + single LLM context)</option>
-            <option value="allLLMv2">All LLM Algorithm Design v2 (DR_Template_v2)</option>
-            <option value="ablation">Ablation — Single-LLM blank prompt (no agents)</option>
+            <option value="automanifold" selected>AutoManifold (template-based algorithm design)</option>
+            <option value="noskel_agents">NoSkel-Agents (skeleton-free multi-agent design)</option>
+            <option value="auto_skills">Auto-Skills (autonomous agent loop over skills)</option>
+            <option value="singlellm">SingleLLM (single blank-prompt baseline)</option>
+            <option value="optimization">Optimization (tune t-SNE / UMAP / PaCMAP / PCA)</option>
           </select>
           <div style="font-size:11px;color:var(--text3);margin-top:3px;" id="mode-hint">
-            Standard: Hyperparameter optimization of t-SNE/UMAP/PaCMAP. Novel modes generate new algorithms instead of tuning a base DR method.
+            AutoManifold: agents analyse the data and compose a novel algorithm from primitives under DR_Template / DR_Template_v2.
           </div>
         </div>
         <div class="form-group" id="drmethod-group">
@@ -751,11 +749,11 @@ select:focus, input:focus {
           font-family: 'JetBrains Mono','Monaco','Menlo',monospace;
           font-size: 12px;
         ">
-          <div style="font-weight:bold;color:#aaa;margin-bottom:6px;">Agent tool-call timeline (Skills Mode)</div>
+          <div style="font-weight:bold;color:#aaa;margin-bottom:6px;">Agent tool-call timeline (Auto-Skills)</div>
           <div id="agent-toolcall-list"></div>
         </div>
         <div id="skill-stream-box" style="display:none;">
-          <div id="skill-stream-label">LLM stream (Skills Mode)</div>
+          <div id="skill-stream-label">LLM stream (Auto-Skills)</div>
           <pre id="skill-stream-pane"></pre>
         </div>
         <div id="log-wrap">
@@ -945,59 +943,44 @@ function updateModelHint() {
 }
 
 const MODE_INFO = {
+  automanifold: {
+    hint: 'AutoManifold: agents analyse the data and compose a novel algorithm from primitives under DR_Template / DR_Template_v2.',
+    label: 'AutoManifold',
+    shortLabel: 'AUTOMANIFOLD',
+    subtitle: 'Template-based composition',
+  },
+  noskel_agents: {
+    hint: 'NoSkel-Agents: a designer agent builds the algorithm from a blank canvas, spawning analysis sub-agents as needed (DR_Template_v2 constraints, no primitive skeleton).',
+    label: 'NoSkel-Agents',
+    shortLabel: 'NOSKEL-AGENTS',
+    subtitle: 'Skeleton-free multi-agent design',
+  },
+  auto_skills: {
+    hint: 'Auto-Skills: an autonomous LLM agent designs the algorithm by invoking skills (analyze-data, design-affinity, synthesize-algorithm, etc.) and compute tools on its own. Watch the tool-call timeline, LLM stream and thinking panes.',
+    label: 'Auto-Skills',
+    shortLabel: 'AUTO-SKILLS',
+    subtitle: 'Autonomous skill-driven design',
+  },
+  singlellm: {
+    hint: 'SingleLLM: a single blank-prompt LLM call produces the entire algorithm. No planning agents, no data characterisation, no baseline feedback. Evaluation and forensics still run so results are comparable.',
+    label: 'SingleLLM',
+    shortLabel: 'SINGLELLM',
+    subtitle: 'Single-LLM blank-prompt baseline',
+  },
   optimization: {
-    hint: 'Standard: Hyperparameter optimization of t-SNE/UMAP/PaCMAP. Novel modes generate new algorithms instead of tuning a base DR method.',
-    label: 'Standard Optimization',
+    hint: 'Optimization: LLM-guided hyperparameter tuning of an existing method (t-SNE / UMAP / PaCMAP / PCA).',
+    label: 'Optimization',
     shortLabel: null,
-  },
-  novel: {
-    hint: 'Novel mode creates entirely new algorithms from primitives — no base DR method needed.',
-    label: 'Novel Algorithm',
-    shortLabel: 'NOVEL',
-  },
-  novelv2: {
-    hint: 'Novel v2 uses DR_Template_v2 synthesis constraints: verified-code reuse, explicit dynamic-code scope, and fixed hyperparameter-selection policy.',
-    label: 'Novel Algorithm v2',
-    shortLabel: 'NOVEL V2',
-  },
-  all_llm: {
-    hint: 'All LLM mode: LLM designs any algorithm from scratch, spawning analysis sub-agents as needed. No primitive constraints. Most robust — always produces an embedding.',
-    label: 'All LLM Algorithm',
-    shortLabel: 'ALL LLM',
-  },
-  novelv2_skills: {
-    hint: 'Skills Mode v2: an autonomous LLM agent designs the algorithm by invoking skills (analyze-data, design-affinity, synthesize-algorithm, etc.) and compute tools (compute_baseline_calibration, validate_custom_code, etc.) on its own. Watch the tool-call timeline + LLM stream + thinking panes to see exactly what the agent is doing.',
-  },
-  allLLMv2: {
-    hint: 'All LLM v2 adds DR_Template_v2 design constraints around verified deterministic code, dynamic code boundaries, and explicit score/hyperparameter plans.',
-    label: 'All LLM Algorithm v2',
-    shortLabel: 'ALL LLM V2',
-  },
-  ablation: {
-    hint: 'Ablation mode: a single blank-prompt LLM call produces the entire algorithm. No planning agents, no data characterisation, no baseline feedback. Evaluation + forensics still run so results are comparable.',
-    label: 'Ablation (single LLM)',
-    shortLabel: 'ABLATION',
+    subtitle: 'Iterative LLM-guided optimisation',
   },
 };
 
-function isNovelMode(mode) {
-  return mode === 'novel' || mode === 'novelv2' || mode === 'novelv2_skills';
-}
-
-function isAllLLMMode(mode) {
-  return mode === 'all_llm' || mode === 'allLLMv2';
-}
-
-function isAblationMode(mode) {
-  return mode === 'ablation';
-}
-
 function isGeneratedAlgorithmMode(mode) {
-  return isNovelMode(mode) || isAllLLMMode(mode) || isAblationMode(mode);
+  return mode in MODE_INFO && mode !== 'optimization';
 }
 
 function modeLabel(mode) {
-  return MODE_INFO[mode]?.label || 'Standard Optimization';
+  return MODE_INFO[mode]?.label || mode || 'Optimization';
 }
 
 function modeShortLabel(mode, fallbackMethod) {
@@ -1005,13 +988,7 @@ function modeShortLabel(mode, fallbackMethod) {
 }
 
 function modeSubtitle(mode, subject, past = false) {
-  const suffix = past ? 'Past experiment' : (isNovelMode(mode)
-    ? (mode === 'novelv2' ? 'Template-v2 composition' : 'Primitive-based composition')
-    : isAllLLMMode(mode)
-      ? (mode === 'allLLMv2' ? 'Template-v2 guided design' : 'Baseline-compared design')
-      : isAblationMode(mode)
-        ? 'Single-LLM blank-prompt baseline'
-        : 'Iterative LLM-guided optimisation');
+  const suffix = past ? 'Past experiment' : (MODE_INFO[mode]?.subtitle || MODE_INFO.optimization.subtitle);
   if (!isGeneratedAlgorithmMode(mode)) {
     const method = (subject?.method || subject?.dr_method || 'tsne').toUpperCase();
     return `${method} · ${subject?.name || subject?.dataset || subject?.runId || ''} · ${suffix}`;
@@ -1190,7 +1167,7 @@ function handleLog(d) {
   detectIterFromLine(line);
 }
 
-/* ── Skill streaming pane (Skills Mode) ───────────────────── */
+/* ── Skill streaming pane (Auto-Skills) ───────────────────── */
 function _skillStreamPane() {
   const box = document.getElementById('skill-stream-box');
   if (box && box.style.display === 'none') box.style.display = 'flex';
@@ -1282,7 +1259,7 @@ function classifyLogLine(line, level) {
   return '';
 }
 
-/* ── Agent tool-call timeline (Skills Mode v2) ────────────── */
+/* ── Agent tool-call timeline (Auto-Skills) ────────────── */
 function handleToolCall(d) {
   const pane = document.getElementById('agent-toolcall-pane');
   const list = document.getElementById('agent-toolcall-list');
@@ -2164,13 +2141,13 @@ function resetUI() {
   document.getElementById('log-wrap').innerHTML =
     '<div class="log-empty">Pipeline starting…</div>';
 
-  // Reset skill stream pane (Skills Mode)
+  // Reset skill stream pane (Auto-Skills)
   const _ssBox = document.getElementById('skill-stream-box');
   const _ssPane = document.getElementById('skill-stream-pane');
   if (_ssPane) _ssPane.innerHTML = '';
   if (_ssBox) _ssBox.style.display = 'none';
 
-  // Reset agent tool-call timeline (Skills Mode v2)
+  // Reset agent tool-call timeline (Auto-Skills)
   const _tcPane = document.getElementById('agent-toolcall-pane');
   const _tcList = document.getElementById('agent-toolcall-list');
   if (_tcList) _tcList.innerHTML = '';

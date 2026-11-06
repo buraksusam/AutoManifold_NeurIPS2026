@@ -1,9 +1,10 @@
 """
-Novel Algorithm Planner — Orchestrates the novel algorithm generation pipeline.
+AutoManifoldPlanner — orchestrates the AutoManifold algorithm-design pipeline.
 
-This planner implements the v2 workflow focused on generating genuinely novel
-dimensionality reduction algorithms through template-based composition of
-algorithmic primitives (affinity, cost, optimization).
+Generates genuinely novel dimensionality reduction algorithms through
+template-based composition of algorithmic primitives (affinity, cost,
+optimization). The analysis agents follow DR_Template (docs/DR_Template.md);
+the final synthesis (Agent 8) follows DR_Template_v2 (docs/DR_Template_v2.md).
 
 Phase 0: Primitive Selection
 Phase 1: Data Characterization (Agent 1)
@@ -101,10 +102,11 @@ def _time_limit(seconds):
         signal.signal(signal.SIGALRM, old)
 
 
-class NovelPlanner:
+class AutoManifoldPlanner:
     """
-    Orchestrator for novel DR algorithm generation using template-based
-    composition of algorithmic primitives.
+    AutoManifold: novel DR algorithm generation by template-based composition
+    of algorithmic primitives. Also the base class for NoSkel-Agents and
+    SingleLLM, which reuse its execution, evaluation and forensics helpers.
     """
 
     def __init__(self, config: PipelineConfig, disabled_components=None):
@@ -120,8 +122,8 @@ class NovelPlanner:
         # pathological generated algorithms hanging a run for hours).
         self._embedding_timeout = DEFAULT_EMBEDDING_TIMEOUT_SECONDS
         self.llm = LLMClient(config.llm)
-        self.mode_name = "novel"
-        self.template_name = "DR_Template"
+        self.mode_name = "automanifold"
+        self.template_name = "DR_Template_v2"
 
         # Compute engines
         self.dr_engine = DRVisualizationEngine()
@@ -139,7 +141,7 @@ class NovelPlanner:
         self.agent6 = HyperparameterOptAgent(self.llm)        # iterative optimizer
         self.agent12_novelty = NoveltyValidatorAgent(self.llm) # Phase 4 novelty
         self.agent7_eval = VisualizationEvaluatorAgent(self.llm)  # Phase 6 evaluator
-        self.agent8 = AlgorithmSynthesizerAgent(self.llm)
+        self.agent8 = AlgorithmSynthesizerAgent(self.llm, mode="automanifold")
         self.agent9 = VisualForensicsAgent(self.llm)     # visual forensics
         self.agent10 = ErrorRecoveryAgent(self.llm)        # code error recovery
         self.agent_math = MathPseudocodeAgent(self.llm)    # math representation + pseudocode

@@ -1,4 +1,4 @@
-"""Tool registry + tool definitions for the Skills Mode v2 agent loop."""
+"""Tool registry + tool definitions for the Auto-Skills agent loop."""
 
 from .registry import ToolRegistry
 from .compute_tools import register_compute_tools, register_finalize_tool

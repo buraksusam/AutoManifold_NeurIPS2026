@@ -1,9 +1,8 @@
 """Worker agents package — one module per specialized agent.
 
-Exports the *novel / novelv2 / novelv2-skills* agent set. Optimize-mode
-agents (PatchStitching, OutlierIdentification, DefaultComparison) are
-imported directly by ``pipeline/planner.py`` and intentionally NOT
-re-exported here — they are not part of the v2 design path.
+Exports the AutoManifold agent set. Optimization-mode agents
+(PatchStitching, OutlierIdentification, DefaultComparison) are imported
+directly by ``pipeline/planner.py`` and intentionally NOT re-exported here.
 """
 
 from .agent_1_data_characterization import DataCharacterizationAgent

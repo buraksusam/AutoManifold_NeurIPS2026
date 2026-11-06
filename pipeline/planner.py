@@ -5,8 +5,8 @@ In ``optimization`` mode the pipeline is intentionally restricted to
 tuning the hyperparameters of a fixed, well-known DR algorithm
 (t-SNE / UMAP / PaCMAP / PCA). No custom algorithm code is generated;
 algorithm-design phases and code-update suggestions from Agent 6 are
-skipped. For novel-algorithm generation use ``planner_novel.py`` or
-``planner_all_llm.py``.
+skipped. For novel-algorithm generation use ``planner_automanifold.py`` or
+``planner_noskel_agents.py``.
 
 Phase 1: Data Characterisation      (Agent 1)
 Phase 2: Auxiliary Analysis          (Agents 2-5, sequential)

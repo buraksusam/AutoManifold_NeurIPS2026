@@ -2,7 +2,7 @@
 DynamicAgent — a generic on-the-fly agent instantiated at runtime with a
 custom role, system message, and task prompt.
 
-Used by AllLLMDesignerAgent to spawn analysis sub-agents on demand without
+Used by NoSkelDesignerAgent to spawn analysis sub-agents on demand without
 any pre-defined agent library entry.
 """
 from ..base_agent import BaseAgent

@@ -61,13 +61,13 @@ class ConvergenceConfig:
     trustworthiness_target: float = 0.95
     continuity_target: float = 0.95
     # When False, skip Agent 6/7 hyperparameter-optimization loop entirely
-    # (novel/all_llm modes do a single-shot embedding; optimization mode is capped to 1 iter).
+    # (algorithm-design modes do a single-shot embedding; optimization mode is capped to 1 iter).
     enable_iterative_optimization: bool = True
 
 
 @dataclass
 class PatchConfig:
-    """Default parameters for patching in Sections 1.1 and 1.2 of DR_Template."""
+    """Default parameters for patching in Sections 1.1 and 1.2 of DR_Template (docs/DR_Template.md)."""
 
     target_patch_size: int = 100  # m ≈ 100 points per patch (DR_Template §1.1)
     reliability_threshold_T: float = 0.90
@@ -182,5 +182,5 @@ class PipelineConfig:
     plots_dir: str = os.path.join(OUTPUT_ROOT, "plots")
     logs_dir: str = os.path.join(OUTPUT_ROOT, "logs")
 
-    # All LLM mode — Agent 10 retry budget (higher than novel mode's default of 2)
-    all_llm_max_recovery_attempts: int = 5
+    # NoSkel-Agents mode — Agent 10 retry budget (higher than AutoManifold's default of 2)
+    noskel_max_recovery_attempts: int = 5

@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Helpers — baseline scoring (mirrors NovelPlanner._score_baseline / _infer_intent)
+# Helpers — baseline scoring (mirrors AutoManifoldPlanner._score_baseline / _infer_intent)
 # ---------------------------------------------------------------------------
 
 def _infer_intent(primary_goal: str) -> str:

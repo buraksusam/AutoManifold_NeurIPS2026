@@ -1,7 +1,7 @@
 """
 Worker Agent 5 — Outlier Identification Agent
 
-DR_Template Section 1.4: Identify Impossible to Embed Points.
+DR_Template Section 1.4: Identify Impossible to Embed Points — see docs/DR_Template.md.
 Identifies data points whose removal would significantly improve
 embedding reliability, and recommends separate-visualization strategy.
 """

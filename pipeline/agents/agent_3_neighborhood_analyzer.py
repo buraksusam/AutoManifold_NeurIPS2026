@@ -1,7 +1,7 @@
 """
 Worker Agent 3 — Maximal Embeddable Neighborhood Analyzer Agent
 
-DR_Template Section 1.2: Identify Maximal Embeddable Neighborhoods.
+DR_Template Section 1.2: Identify Maximal Embeddable Neighborhoods — see docs/DR_Template.md.
 Estimates the largest local neighbourhood radius that can be embedded
 with acceptable reliability via grid search or predictive modelling.
 """

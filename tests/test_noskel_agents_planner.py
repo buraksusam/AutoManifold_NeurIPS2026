@@ -6,39 +6,38 @@ import numpy as np
 def _make_config():
     return PipelineConfig(
         llm=LLMConfig(provider="openai", model="gpt-4o", api_key="test-key"),
-        all_llm_max_recovery_attempts=5,
+        noskel_max_recovery_attempts=5,
     )
 
 
-def test_all_llm_planner_can_be_instantiated():
-    from pipeline.planner_all_llm import AllLLMPlanner
-    planner = AllLLMPlanner(_make_config())
+def test_noskel_planner_can_be_instantiated():
+    from pipeline.planner_noskel_agents import NoSkelAgentsPlanner
+    planner = NoSkelAgentsPlanner(_make_config())
     assert planner is not None
 
 
-def test_all_llm_planner_has_designer_agent():
-    from pipeline.planner_all_llm import AllLLMPlanner
-    from pipeline.agents.agent_all_llm_designer import AllLLMDesignerAgent
-    planner = AllLLMPlanner(_make_config())
+def test_noskel_planner_has_designer_agent():
+    from pipeline.planner_noskel_agents import NoSkelAgentsPlanner
+    from pipeline.agents.agent_noskel_designer import NoSkelDesignerAgent
+    planner = NoSkelAgentsPlanner(_make_config())
     assert hasattr(planner, "designer_agent")
-    assert isinstance(planner.designer_agent, AllLLMDesignerAgent)
+    assert isinstance(planner.designer_agent, NoSkelDesignerAgent)
 
 
-def test_all_llm_planner_has_agent10():
-    from pipeline.planner_all_llm import AllLLMPlanner
+def test_noskel_planner_has_agent10():
+    from pipeline.planner_noskel_agents import NoSkelAgentsPlanner
     from pipeline.agents.agent_10_error_recovery import ErrorRecoveryAgent
-    planner = AllLLMPlanner(_make_config())
+    planner = NoSkelAgentsPlanner(_make_config())
     assert hasattr(planner, "agent10")
     assert isinstance(planner.agent10, ErrorRecoveryAgent)
 
 
-def test_all_llm_planner_phase4_uses_higher_retry_budget():
-    """AllLLMPlanner._phase4_implement_and_recover must pass max_attempts=5 to _attempt_error_recovery."""
-    from pipeline.planner_all_llm import AllLLMPlanner
+def test_noskel_planner_phase4_uses_higher_retry_budget(tmp_path):
+    """NoSkelAgentsPlanner._phase4_implement_and_recover must pass max_attempts=5 to _attempt_error_recovery."""
+    from pipeline.planner_noskel_agents import NoSkelAgentsPlanner
 
-    planner = AllLLMPlanner(_make_config())
-    planner.output_dir = "/tmp/test_all_llm"
-    import os; os.makedirs(planner.output_dir, exist_ok=True)
+    planner = NoSkelAgentsPlanner(_make_config())
+    planner.output_dir = str(tmp_path)
 
     # Code that always fails
     bad_code = "def custom_embedding(data, labels, params):\n    raise RuntimeError('always fails')"
@@ -65,16 +64,16 @@ def test_all_llm_planner_phase4_uses_higher_retry_budget():
     assert captured.get("max_attempts") == 5
 
 
-def test_all_llm_run_produces_baseline_comparison(tmp_path):
-    from pipeline.planner_all_llm import AllLLMPlanner
+def test_noskel_run_produces_baseline_comparison(tmp_path):
+    from pipeline.planner_noskel_agents import NoSkelAgentsPlanner
 
-    planner = AllLLMPlanner(_make_config())
+    planner = NoSkelAgentsPlanner(_make_config())
     data = np.random.rand(12, 4)
     embedding = np.random.rand(12, 2)
 
     planner._phase1_characterize = MagicMock()
     planner._phase2_design = MagicMock(return_value={"algorithm_name": "BlankCanvas"})
-    planner._phase3_synthesize_all_llm = MagicMock(return_value={"algorithm_specification": {"name": "BlankCanvas"}})
+    planner._phase3_synthesize_noskel = MagicMock(return_value={"algorithm_specification": {"name": "BlankCanvas"}})
     planner._phase4_implement_and_recover = MagicMock(return_value={
         "algo_name": "BlankCanvas",
         "used_fallback": False,
@@ -100,4 +99,4 @@ def test_all_llm_run_produces_baseline_comparison(tmp_path):
 
     planner._compare_with_baselines.assert_called_once()
     assert result["baseline_comparison"]["comparison_table"][0]["method"] == "★ BlankCanvas"
-    assert (tmp_path / "final_all_llm_report.json").exists()
+    assert (tmp_path / "final_noskel_report.json").exists()

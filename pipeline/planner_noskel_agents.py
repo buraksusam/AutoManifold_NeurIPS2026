@@ -1,16 +1,17 @@
 """
-AllLLMPlanner — unconstrained "blank canvas" algorithm design pipeline.
+NoSkelAgentsPlanner — NoSkel-Agents: skeleton-free ("blank canvas") algorithm
+design under the DR_Template_v2 constraints (docs/DR_Template_v2.md).
 
-Subclasses NovelPlanner and overrides the design/synthesis/recovery phases.
+Subclasses AutoManifoldPlanner and overrides the design/synthesis/recovery phases.
 Inherits all code-execution helpers (_exec_custom_code, _test_custom_code,
 _run_custom_code, _attempt_error_recovery, _iterative_optimise, etc.).
 
-Phase 1: Data Characterization    (inherited from NovelPlanner)
-Phase 2: Open-Ended Design        (AllLLMDesignerAgent + DynamicAgents)
-Phase 3: Code Synthesis           (Agent 8 with all_llm prompt)
+Phase 1: Data Characterization    (inherited from AutoManifoldPlanner)
+Phase 2: Open-Ended Design        (NoSkelDesignerAgent + DynamicAgents)
+Phase 3: Code Synthesis           (Agent 8, noskel_agents prompt)
 Phase 4: Implementation & Recovery (Agent 10 × 5 retries + t-SNE fallback)
-Phase 5: Iterative Refinement     (inherited from NovelPlanner)
-Phase 6: Visual Forensics         (inherited from NovelPlanner)
+Phase 5: Iterative Refinement     (inherited from AutoManifoldPlanner)
+Phase 6: Visual Forensics         (inherited from AutoManifoldPlanner)
 """
 
 from __future__ import annotations
@@ -23,29 +24,27 @@ from typing import Any, Dict, Optional
 import numpy as np
 
 from .config import OUTPUT_ROOT, PipelineConfig
-from .planner_novel import NovelPlanner
-from .agents.agent_all_llm_designer import AllLLMDesignerAgent
+from .planner_automanifold import AutoManifoldPlanner
+from .agents.agent_noskel_designer import NoSkelDesignerAgent
 from .base_agent import BaseAgent
 
 logger = logging.getLogger(__name__)
 
 
-class AllLLMPlanner(NovelPlanner):
+class NoSkelAgentsPlanner(AutoManifoldPlanner):
     """
-    Unconstrained all-LLM DR algorithm design pipeline.
+    NoSkel-Agents: unconstrained, skeleton-free DR algorithm design pipeline.
     The designer has a blank canvas — no primitive vocabulary constraints.
     """
 
     def __init__(self, config: PipelineConfig):
         super().__init__(config)
-        self.mode_name = "all_llm"
-        self.template_name = "DR_Template"
-        self.synth_mode = "all_llm"
-        self.designer_agent = AllLLMDesignerAgent(self.llm)
-        # Override agent8 with all_llm mode so the synthesizer uses the correct
-        # prompt regardless of how the context dict is constructed.
+        self.mode_name = "noskel_agents"
+        self.template_name = "DR_Template_v2"
+        self.designer_agent = NoSkelDesignerAgent(self.llm)
+        # Agent 8 implements the designer's free-form spec (no primitive agents).
         from .agents.agent_8_synthesizer import AlgorithmSynthesizerAgent
-        self.agent8 = AlgorithmSynthesizerAgent(self.llm, mode="all_llm")
+        self.agent8 = AlgorithmSynthesizerAgent(self.llm, mode="noskel_agents")
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -58,7 +57,7 @@ class AllLLMPlanner(NovelPlanner):
         label_names: Optional[Dict[int, str]] = None,
         output_dir: str = OUTPUT_ROOT,
     ) -> Dict[str, Any]:
-        """Execute the All-LLM algorithm design pipeline."""
+        """Execute the NoSkel-Agents algorithm design pipeline."""
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
 
@@ -87,12 +86,12 @@ class AllLLMPlanner(NovelPlanner):
         design_spec = self._phase2_design()
 
         self._stage("🏗️", "PHASE 3 — Code Synthesis")
-        synth_result = self._phase3_synthesize_all_llm(design_spec)
+        synth_result = self._phase3_synthesize_noskel(design_spec)
 
         self._stage("🔧", "PHASE 4 — Implementation & Recovery")
         impl_result = self._phase4_implement_and_recover(data, labels, label_names, synth_result)
 
-        algo_name = impl_result.get("algo_name", "AllLLM Algorithm")
+        algo_name = impl_result.get("algo_name", "NoSkel-Agents Algorithm")
         self._novel_algo_name = algo_name
 
         # Phase 4b — Mathematical Representation & Pseudocode
@@ -106,7 +105,7 @@ class AllLLMPlanner(NovelPlanner):
             code_str=impl_result.get("code", "") if not impl_result.get("used_fallback") else "",
             default_params=impl_result.get("params", {}),
             description=algo_description,
-            output_prefix="all_llm",
+            output_prefix="noskel",
         )
 
         if impl_result.get("used_fallback"):
@@ -149,12 +148,12 @@ class AllLLMPlanner(NovelPlanner):
             embedding,
             best_metrics,
             algo_name,
-            output_prefix="all_llm",
-            comparison_title="All LLM Algorithm vs Baselines",
-            metrics_plot_title="Metrics Comparison — All LLM vs Baselines",
-            metrics_json_label="All LLM Algorithm",
+            output_prefix="noskel",
+            comparison_title="NoSkel-Agents Algorithm vs Baselines",
+            metrics_plot_title="Metrics Comparison — NoSkel-Agents vs Baselines",
+            metrics_json_label="NoSkel-Agents Algorithm",
         )
-        self._save_json("all_llm_comparison.json", comparison)
+        self._save_json("noskel_comparison.json", comparison)
 
         self._stage("🔬", "PHASE 7 — Visual Forensics")
         vi_result = {}
@@ -175,7 +174,7 @@ class AllLLMPlanner(NovelPlanner):
             "optimization_history": self.optimization_history,
             "visual_forensics": vi_result,
         }
-        report_path = os.path.join(output_dir, "final_all_llm_report.json")
+        report_path = os.path.join(output_dir, "final_noskel_report.json")
         with open(report_path, "w") as f:
             json.dump(final, f, indent=2, default=str)
         logger.info("Final report saved → %s", report_path)
@@ -186,7 +185,7 @@ class AllLLMPlanner(NovelPlanner):
     # ------------------------------------------------------------------
 
     def _phase2_design(self) -> Dict[str, Any]:
-        """Multi-turn design loop using AllLLMDesignerAgent."""
+        """Multi-turn design loop using NoSkelDesignerAgent."""
         print("  [1/1] Running open-ended design loop …", flush=True)
         data_char = dict(self.context.get("agent1_output", {}))
         # Surface the optimization objective directly to the designer. Without
@@ -201,11 +200,11 @@ class AllLLMPlanner(NovelPlanner):
         session_transcript = design_spec.pop("_session_transcript", [])
         forced = design_spec.pop("_forced_finalize", False)
 
-        self._save_json("all_llm_design_session.json", {
+        self._save_json("noskel_design_session.json", {
             "transcript": session_transcript,
             "forced_finalize": forced,
         })
-        self._save_json("all_llm_algorithm_spec.json", design_spec)
+        self._save_json("noskel_algorithm_spec.json", design_spec)
 
         algo_name = design_spec.get("algorithm_name", "?")
         print(f"  → Algorithm: {algo_name}", flush=True)
@@ -219,10 +218,9 @@ class AllLLMPlanner(NovelPlanner):
     # Phase 3 — Code Synthesis
     # ------------------------------------------------------------------
 
-    def _phase3_synthesize_all_llm(self, design_spec: Dict[str, Any]) -> Dict[str, Any]:
-        """Synthesize code using Agent 8 in all_llm mode."""
-        synth_mode = getattr(self, "synth_mode", "all_llm")
-        print(f"  [1/1] Synthesizing code (Agent 8 — {synth_mode} mode) …", flush=True)
+    def _phase3_synthesize_noskel(self, design_spec: Dict[str, Any]) -> Dict[str, Any]:
+        """Synthesize code using Agent 8 in noskel_agents mode."""
+        print("  [1/1] Synthesizing code (Agent 8 — noskel_agents mode) …", flush=True)
         ctx = {**self.context, "mode": self.mode_name, "design_spec": design_spec}
         result = self.agent8.run(ctx)
         self._save_json("agent8_final_synthesis.json", result)
@@ -244,7 +242,7 @@ class AllLLMPlanner(NovelPlanner):
         """Validate code, recover with Agent 10 (×5), fallback to t-SNE only."""
         code_str = synth_result.get("custom_embedding_code", "")
         default_params = synth_result.get("default_params", {})
-        algo_name = synth_result.get("algorithm_specification", {}).get("name", "AllLLM Algorithm")
+        algo_name = synth_result.get("algorithm_specification", {}).get("name", "NoSkel-Agents Algorithm")
         result: Dict[str, Any] = {"algorithm_name": algo_name, "success": False, "used_fallback": False}
 
         # --- Code generation retry (up to 3×) if Agent 8 returned empty ---
@@ -252,7 +250,7 @@ class AllLLMPlanner(NovelPlanner):
             print("  ⚠️  No code from Agent 8 — retrying up to 3× …", flush=True)
             for attempt in range(1, 4):
                 print(f"  → Code retry {attempt}/3 …", flush=True)
-                code_str, default_params = self._retry_code_generation_all_llm(attempt)
+                code_str, default_params = self._retry_code_generation_noskel(attempt)
                 if code_str:
                     print(f"  ✅ Code obtained on retry {attempt}", flush=True)
                     break
@@ -265,9 +263,9 @@ class AllLLMPlanner(NovelPlanner):
             return result
 
         # Save generated code
-        code_path = os.path.join(self.output_dir, "all_llm_algorithm.py")
+        code_path = os.path.join(self.output_dir, "noskel_algorithm.py")
         with open(code_path, "w") as f:
-            f.write(f"# {algo_name}\n# Generated by All LLM Algorithm Design pipeline\n\n")
+            f.write(f"# {algo_name}\n# Generated by the NoSkel-Agents pipeline\n\n")
             f.write(code_str)
         print(f"  → Code saved: {code_path}", flush=True)
 
@@ -277,15 +275,15 @@ class AllLLMPlanner(NovelPlanner):
 
         if not test_ok:
             print(f"  ⚠️  Validation failed: {test_msg}", flush=True)
-            print(f"  → Attempting recovery via Agent 10 (max {self.config.all_llm_max_recovery_attempts} attempts) …", flush=True)
+            print(f"  → Attempting recovery via Agent 10 (max {self.config.noskel_max_recovery_attempts} attempts) …", flush=True)
             fixed_code, fixed_params, recovery_ok = self._attempt_error_recovery(
                 code_str, test_msg, data, labels, default_params,
-                max_attempts=self.config.all_llm_max_recovery_attempts,
+                max_attempts=self.config.noskel_max_recovery_attempts,
             )
             if recovery_ok:
                 code_str = fixed_code
                 default_params = fixed_params
-                rec_path = os.path.join(self.output_dir, "all_llm_algorithm_recovered.py")
+                rec_path = os.path.join(self.output_dir, "noskel_algorithm_recovered.py")
                 with open(rec_path, "w") as f:
                     f.write(f"# Recovered from error: {test_msg[:200]}\n\n")
                     f.write(code_str)
@@ -307,15 +305,15 @@ class AllLLMPlanner(NovelPlanner):
         return result
 
     # ------------------------------------------------------------------
-    # Helpers specific to AllLLMPlanner
+    # Helpers specific to NoSkelAgentsPlanner
     # ------------------------------------------------------------------
 
     def _fallback_embedding(self, data: np.ndarray) -> np.ndarray:
-        """Use t-SNE as the sole fallback embedding for all-LLM mode."""
+        """Use t-SNE as the sole fallback embedding for NoSkel-Agents mode."""
         print("  → Falling back to t-SNE …", flush=True)
         return self.dr_engine.compute_embedding(data, method="tsne")
 
-    def _retry_code_generation_all_llm(self, attempt: int) -> tuple:
+    def _retry_code_generation_noskel(self, attempt: int) -> tuple:
         """Focused code-only LLM call using the design spec from context."""
         design_spec = self.context.get("design_spec", {})
         spec_json = json.dumps(design_spec, indent=2, default=str)[:3000]
