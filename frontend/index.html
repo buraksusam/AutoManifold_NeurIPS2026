@@ -1,0 +1,2248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DR Design Pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* ── Reset & variables ─────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:       #F8FAFC;
+  --surface:  #FFFFFF;
+  --surface2: #F1F5F9;
+  --border:   #E2E8F0;
+  --border2:  #CBD5E1;
+  --blue:     #1D4ED8;
+  --blue-h:   #1E3A8A;
+  --blue-bg:  #EFF6FF;
+  --blue-dim: #93C5FD;
+  --green:    #15803D;
+  --green-bg: #F0FDF4;
+  --green-dim:#86EFAC;
+  --amber:    #B45309;
+  --amber-bg: #FFFBEB;
+  --amber-dim:#FCD34D;
+  --red:      #B91C1C;
+  --red-bg:   #FEF2F2;
+  --red-dim:  #FCA5A5;
+  --text:     #0F172A;
+  --text2:    #475569;
+  --text3:    #94A3B8;
+  --term-bg:  #0F172A;
+  --term-txt: #CBD5E1;
+  --term-grn: #4ADE80;
+  --term-blu: #60A5FA;
+  --term-ylw: #FCD34D;
+  --term-red: #F87171;
+  --term-dim: #64748B;
+  --radius:   8px;
+  --shadow:   0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:0 4px 12px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.04);
+  --sidebar:  320px;
+}
+html, body { height: 100%; font-family: 'Inter', system-ui, sans-serif; font-size: 14px; color: var(--text); background: var(--bg); }
+
+/* ── Layout ────────────────────────────────────────────────── */
+#app { display: flex; height: 100vh; overflow: hidden; }
+
+/* sidebar */
+#sidebar {
+  width: var(--sidebar); min-width: var(--sidebar); display: flex; flex-direction: column;
+  background: var(--surface); border-right: 1px solid var(--border);
+  overflow-y: auto; transition: width .25s, min-width .25s;
+  position: relative; z-index: 10;
+}
+#sidebar.collapsed { width: 0; min-width: 0; overflow: hidden; }
+#sidebar-inner { padding: 0 0 24px; min-width: var(--sidebar); }
+
+/* main */
+#main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── Sidebar header ────────────────────────────────────────── */
+.sidebar-head {
+  padding: 18px 20px 16px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.sidebar-logo { display: flex; align-items: center; gap: 10px; }
+.logo-icon {
+  width: 32px; height: 32px; background: var(--blue); border-radius: 7px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.logo-icon svg { width: 18px; height: 18px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.logo-text { font-size: 14px; font-weight: 700; color: var(--text); line-height: 1.2; }
+.logo-sub { font-size: 11px; font-weight: 400; color: var(--text3); }
+
+/* ── Past runs panel ──────────────────────────────────────── */
+.past-run-item {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border-radius: 6px; cursor: pointer; transition: background .12s;
+  border: 1px solid transparent;
+}
+.past-run-item:hover { background: var(--surface2); border-color: var(--border); }
+.past-run-item.active { background: color-mix(in srgb, var(--blue) 10%, transparent); border-color: var(--blue); }
+.past-run-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+.past-run-dot.partial { background: var(--amber); }
+.past-run-info { flex: 1; min-width: 0; }
+.past-run-id { font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.past-run-meta { font-size: 10px; color: var(--text3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.past-run-score { font-size: 11px; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: var(--green); flex-shrink: 0; }
+#past-runs-list { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; padding: 2px 0; }
+#past-runs-refresh { background: none; border: 1px solid var(--border2); color: var(--text3); border-radius: 5px; padding: 4px 8px; font-size: 11px; cursor: pointer; transition: background .12s, color .12s; }
+#past-runs-refresh:hover { background: var(--surface2); color: var(--text); }
+#past-runs-loading { font-size: 12px; color: var(--text3); padding: 4px 0; }
+
+/* ── Form sections ─────────────────────────────────────────── */
+.section { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.section:last-child { border-bottom: none; }
+.section-title {
+  font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text3); margin-bottom: 12px;
+}
+.form-group { margin-bottom: 12px; }
+.form-group:last-child { margin-bottom: 0; }
+label { display: block; font-size: 12px; font-weight: 500; color: var(--text2); margin-bottom: 4px; }
+select, input[type=text], input[type=number], input[type=password] {
+  width: 100%; padding: 7px 10px; border: 1px solid var(--border2);
+  border-radius: var(--radius); background: var(--surface); color: var(--text);
+  font-family: inherit; font-size: 13px; outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+select:focus, input:focus {
+  border-color: var(--blue); box-shadow: 0 0 0 3px rgba(29,78,216,.1);
+}
+.radio-group { display: flex; gap: 6px; margin-bottom: 10px; }
+.radio-btn {
+  flex: 1; padding: 6px 10px; border: 1px solid var(--border2); border-radius: 6px;
+  background: var(--surface); cursor: pointer; text-align: center;
+  font-size: 12px; font-weight: 500; color: var(--text2); transition: all .15s;
+}
+.radio-btn.active { border-color: var(--blue); background: var(--blue-bg); color: var(--blue); }
+.upload-zone {
+  border: 1px dashed var(--border2); border-radius: var(--radius); padding: 10px;
+  text-align: center; cursor: pointer; transition: all .15s; color: var(--text3);
+  font-size: 12px;
+}
+.upload-zone:hover { border-color: var(--blue); background: var(--blue-bg); color: var(--blue); }
+.upload-zone input { display: none; }
+.upload-name { font-size: 11px; color: var(--green); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.key-hint { font-size: 11px; color: var(--text3); margin-top: 3px; }
+
+/* ── Start button ──────────────────────────────────────────── */
+.btn-start {
+  width: 100%; padding: 10px; border: none; border-radius: var(--radius);
+  background: var(--blue); color: #fff; font-family: inherit; font-size: 13px;
+  font-weight: 600; cursor: pointer; transition: background .15s, opacity .15s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn-start:hover:not(:disabled) { background: var(--blue-h); }
+.btn-start:disabled { opacity: .55; cursor: not-allowed; }
+.btn-start .btn-spinner { display: none; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; }
+.btn-start.loading .btn-spinner { display: block; }
+.btn-start.loading .btn-label { opacity: .7; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* run status chip */
+.run-chip {
+  display: none; align-items: center; gap: 6px; padding: 6px 10px;
+  background: var(--surface2); border-radius: 20px; font-size: 12px; color: var(--text2);
+}
+.run-chip.visible { display: flex; }
+.run-chip .dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--text3); flex-shrink: 0;
+}
+.run-chip.running .dot { background: var(--blue); animation: pulse 1.4s ease-in-out infinite; }
+.run-chip.complete .dot { background: var(--green); animation: none; }
+.run-chip.error .dot { background: var(--red); animation: none; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+
+/* ── Main header ───────────────────────────────────────────── */
+#main-header {
+  display: flex; align-items: center; gap: 12px; padding: 14px 24px;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sidebar-toggle {
+  width: 30px; height: 30px; border: 1px solid var(--border2); border-radius: 6px;
+  background: var(--surface); cursor: pointer; display: flex; align-items: center;
+  justify-content: center; color: var(--text3); transition: all .15s; flex-shrink: 0;
+}
+.sidebar-toggle:hover { background: var(--surface2); color: var(--text); }
+.main-title { font-size: 15px; font-weight: 700; color: var(--text); }
+.main-sub { font-size: 12px; color: var(--text3); }
+
+/* ── Phase bar ─────────────────────────────────────────────── */
+#phase-bar {
+  display: flex; align-items: center; padding: 0 24px; gap: 0;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  overflow-x: auto; flex-shrink: 0;
+}
+.phase-item {
+  display: flex; align-items: center; gap: 0; flex-shrink: 0;
+}
+.phase-step {
+  display: flex; align-items: center; gap: 7px; padding: 12px 14px;
+  font-size: 12px; font-weight: 500; color: var(--text3); position: relative;
+  white-space: nowrap; transition: color .2s;
+}
+.phase-step.active { color: var(--blue); }
+.phase-step.done { color: var(--green); }
+.phase-circle {
+  width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border2);
+  display: flex; align-items: center; justify-content: center; font-size: 10px;
+  font-weight: 700; background: var(--surface); flex-shrink: 0; transition: all .2s;
+}
+.phase-step.active .phase-circle {
+  border-color: var(--blue); background: var(--blue-bg); color: var(--blue);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.phase-step.done .phase-circle {
+  border-color: var(--green); background: var(--green-bg); color: var(--green);
+}
+.phase-sep { color: var(--border2); font-size: 14px; padding: 0 2px; }
+.phase-iter-badge {
+  display: none; margin-left: 4px; padding: 1px 5px; background: var(--blue-bg);
+  color: var(--blue); border-radius: 10px; font-size: 10px; font-weight: 600;
+}
+.phase-step.active .phase-iter-badge { display: inline; }
+
+/* ── Tabs ──────────────────────────────────────────────────── */
+#tab-bar {
+  display: flex; gap: 0; padding: 0 24px; background: var(--surface);
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.tab {
+  padding: 10px 16px; font-size: 13px; font-weight: 500; color: var(--text3);
+  cursor: pointer; border-bottom: 2px solid transparent; transition: all .15s;
+  display: flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.tab:hover { color: var(--text2); }
+.tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+.tab-badge {
+  min-width: 18px; height: 18px; padding: 0 5px; background: var(--surface2);
+  border-radius: 9px; font-size: 10px; font-weight: 700; color: var(--text3);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.tab.active .tab-badge { background: var(--blue-bg); color: var(--blue); }
+
+/* ── Tab content ───────────────────────────────────────────── */
+#tab-content { flex: 1; overflow: hidden; position: relative; }
+.tab-panel { display: none; height: 100%; overflow-y: auto; }
+.tab-panel.active { display: block; }
+
+/* ── Log tab ───────────────────────────────────────────────── */
+#log-wrap {
+  height: 100%; background: var(--term-bg); font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 12px; padding: 16px; overflow-y: auto; line-height: 1.7;
+}
+.log-line { display: flex; gap: 10px; margin-bottom: 1px; }
+.log-time { color: var(--term-dim); flex-shrink: 0; }
+.log-text { color: var(--term-txt); word-break: break-all; flex: 1; }
+.log-line.phase .log-text { color: var(--term-blu); font-weight: 500; }
+.log-line.iter .log-text { color: var(--term-ylw); }
+.log-line.score .log-text { color: var(--term-grn); font-weight: 500; }
+.log-line.warning .log-text { color: var(--term-ylw); }
+.log-line.error .log-text { color: var(--term-red); }
+.log-line.saved .log-text { color: var(--term-dim); }
+.log-line.agent .log-text { color: #ffb070; }
+.log-empty { color: var(--term-dim); font-style: italic; padding: 8px 0; }
+
+/* ── Skill streaming pane (Skills Mode) ────────────────────── */
+#skill-stream-box {
+  background: #0e1620; border-bottom: 1px solid var(--border);
+  max-height: 40%; display: flex; flex-direction: column;
+}
+#skill-stream-label {
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 11px; font-weight: 600; color: var(--term-blu);
+  padding: 6px 16px; border-bottom: 1px solid rgba(255,255,255,0.06);
+  letter-spacing: 0.04em; text-transform: uppercase;
+}
+#skill-stream-pane {
+  margin: 0; padding: 12px 16px; overflow-y: auto; flex: 1;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 12px; line-height: 1.55;
+  color: var(--term-txt); background: transparent;
+  white-space: pre-wrap; word-break: break-word;
+}
+#skill-stream-pane .stream-header {
+  display: block; color: var(--term-grn); font-weight: 600;
+  margin: 6px 0 2px 0;
+}
+#skill-stream-pane .stream-footer {
+  display: block; color: var(--term-dim); margin-bottom: 6px;
+}
+/* Reasoning/thinking content — dim italic, prefixed with a brain glyph */
+#skill-stream-pane .think-header {
+  display: block; color: #ffaa55; font-weight: 600;
+  margin: 6px 0 2px 0;
+}
+#skill-stream-pane .think-footer {
+  display: block; color: #886633; margin-bottom: 6px;
+}
+#skill-stream-pane .think-text {
+  color: #888; font-style: italic;
+}
+
+/* ── Iterations tab ────────────────────────────────────────── */
+#iter-tab { padding: 20px 24px; }
+.iter-summary {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px;
+}
+.summary-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px 16px; box-shadow: var(--shadow);
+}
+.summary-label { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .05em; }
+.summary-val { font-size: 24px; font-weight: 700; color: var(--text); margin-top: 4px; }
+.summary-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+.summary-card.highlight .summary-val { color: var(--blue); }
+
+.chart-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 16px 20px; margin-bottom: 20px; box-shadow: var(--shadow);
+}
+.chart-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 12px; }
+.chart-wrap { height: 180px; position: relative; }
+
+.iter-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; align-items: start; }
+.iter-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow); overflow: hidden; transition: box-shadow .15s;
+}
+.iter-card:hover { box-shadow: var(--shadow-md); }
+.iter-card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; border-bottom: 1px solid var(--border);
+}
+.iter-num-label { font-size: 13px; font-weight: 600; color: var(--text); }
+.iter-score-badge {
+  padding: 3px 9px; border-radius: 12px; font-size: 12px; font-weight: 700;
+  background: var(--surface2); color: var(--text3);
+}
+.iter-score-badge.low { background: var(--red-bg); color: var(--red); }
+.iter-score-badge.mid { background: var(--amber-bg); color: var(--amber); }
+.iter-score-badge.good { background: var(--blue-bg); color: var(--blue); }
+.iter-score-badge.great { background: var(--green-bg); color: var(--green); }
+
+.iter-plot-wrap {
+  width: 100%; aspect-ratio: 1; background: var(--surface2);
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  position: relative;
+}
+.iter-plot-wrap img { width: 100%; height: 100%; object-fit: cover; display: none; cursor: zoom-in; }
+.iter-plot-placeholder {
+  position: absolute; color: var(--text3); font-size: 12px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.plot-spinner {
+  width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--blue);
+  border-radius: 50%; animation: spin .8s linear infinite;
+}
+.iter-metrics { padding: 10px 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+.metric-item { display: flex; justify-content: space-between; align-items: center; }
+.metric-name { font-size: 11px; color: var(--text3); }
+.metric-val { font-size: 12px; font-weight: 600; color: var(--text); font-family: 'JetBrains Mono', monospace; }
+.iter-rationale {
+  border-top: 1px solid var(--border); font-size: 12px;
+}
+.iter-rat-toggle {
+  padding: 8px 14px; display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer; color: var(--text2); font-weight: 500; user-select: none;
+  transition: background .12s;
+}
+.iter-rat-toggle:hover { background: var(--surface2); }
+.iter-rat-toggle .chevron { transition: transform .2s; font-size: 10px; }
+.iter-rat-toggle.open .chevron { transform: rotate(180deg); }
+.iter-rat-body { display: none; padding: 0 14px 12px; color: var(--text2); line-height: 1.6; }
+.iter-rat-body.open { display: block; }
+.rat-section { margin-bottom: 8px; }
+.rat-section-title { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+.rec-item { display: flex; gap: 6px; margin-bottom: 3px; }
+.rec-param { font-family: 'JetBrains Mono', monospace; font-size: 11px; background: var(--surface2); padding: 1px 5px; border-radius: 4px; color: var(--text); flex-shrink: 0; }
+.rec-arrow { color: var(--text3); }
+.rec-val { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--blue); font-weight: 600; }
+.rec-priority { font-size: 10px; padding: 1px 4px; border-radius: 3px; flex-shrink: 0; }
+.rec-priority.high { background: var(--red-bg); color: var(--red); }
+.rec-priority.medium { background: var(--amber-bg); color: var(--amber); }
+.rec-priority.low { background: var(--green-bg); color: var(--green); }
+.iter-card.best-card { border-color: var(--green); }
+.best-badge {
+  font-size: 10px; font-weight: 700; padding: 1px 6px; background: var(--green-bg);
+  color: var(--green); border-radius: 10px; margin-left: 6px;
+}
+
+/* ── Agents tab ────────────────────────────────────────────── */
+#agents-tab { padding: 20px 24px; }
+.phase-group { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 12px; overflow: hidden; box-shadow: var(--shadow); }
+.phase-group-head {
+  display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+  cursor: pointer; user-select: none; transition: background .12s;
+}
+.phase-group-head:hover { background: var(--surface2); }
+.phase-group-icon { font-size: 16px; }
+.phase-group-title { font-size: 13px; font-weight: 600; flex: 1; }
+.phase-group-status { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; }
+.phase-group-status.pending { background: var(--surface2); color: var(--text3); }
+.phase-group-status.running { background: var(--blue-bg); color: var(--blue); }
+.phase-group-status.done { background: var(--green-bg); color: var(--green); }
+.phase-group-chevron { color: var(--text3); font-size: 11px; transition: transform .2s; }
+.phase-group-head.open .phase-group-chevron { transform: rotate(180deg); }
+.phase-group-body { display: none; border-top: 1px solid var(--border); }
+.phase-group-body.open { display: block; }
+
+.agent-entry { border-bottom: 1px solid var(--border); }
+.agent-entry:last-child { border-bottom: none; }
+.agent-entry-head {
+  display: flex; align-items: center; gap: 10px; padding: 10px 16px 10px 28px;
+  cursor: pointer; user-select: none; transition: background .12s;
+}
+.agent-entry-head:hover { background: var(--surface2); }
+.agent-name { font-size: 12px; font-weight: 600; flex: 1; }
+.agent-score { font-size: 11px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+.agent-entry-body { display: none; padding: 12px 28px 14px; background: var(--surface2); }
+.agent-entry-body.open { display: block; }
+.agent-json { font-family: 'JetBrains Mono', monospace; font-size: 11px; white-space: pre-wrap; word-break: break-word; color: var(--text2); max-height: 360px; overflow-y: auto; line-height: 1.6; }
+
+/* json syntax highlight */
+.j-key { color: #1E40AF; }
+.j-str { color: #15803D; }
+.j-num { color: #B45309; }
+.j-bool { color: #7C3AED; }
+.j-null { color: #94A3B8; }
+
+/* ── Results tab ───────────────────────────────────────────── */
+#results-tab { padding: 20px 24px; }
+.results-header { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+.results-sub { color: var(--text3); font-size: 13px; margin-bottom: 20px; }
+.results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+.result-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); cursor: pointer; transition: border-color .15s, box-shadow .15s, transform .15s; }
+.result-card:hover { border-color: var(--blue); box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue) 25%, transparent); transform: translateY(-2px); }
+.result-card-title { padding: 10px 14px; font-size: 12px; font-weight: 600; color: var(--text2); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.result-card-title::after { content: '⤢'; font-size: 14px; opacity: .4; }
+.result-card img { width: 100%; display: block; }
+.result-card.static { cursor: default; }
+.result-card.static:hover { border-color: var(--border); box-shadow: var(--shadow); transform: none; }
+.result-card.static .result-card-title::after { content: ''; }
+.result-card-body { padding: 14px; }
+.skill-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.skill-stat { background: var(--surface2); border-radius: 8px; padding: 10px 12px; }
+.skill-stat-name { font-size: 11px; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.skill-stat-val { font-size: 18px; font-weight: 700; color: var(--text); margin-top: 4px; }
+.skill-list { display: grid; gap: 6px; margin-top: 10px; }
+.skill-line { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--text2); padding: 7px 0; border-top: 1px solid var(--border); }
+.skill-line:first-child { border-top: 0; padding-top: 0; }
+.skill-line strong { color: var(--text); font-weight: 600; }
+.skill-json { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }
+.skill-json summary { cursor: pointer; font-size: 12px; color: var(--blue); font-weight: 600; }
+.skill-json pre { margin: 10px 0 0 0; max-height: 260px; overflow: auto; background: var(--surface2); border-radius: 8px; padding: 12px; font-size: 11px; }
+
+/* ── Image lightbox ────────────────────────────────────────── */
+#lightbox { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.82); backdrop-filter: blur(4px); opacity: 0; pointer-events: none; transition: opacity .2s; }
+#lightbox.open { opacity: 1; pointer-events: all; }
+#lightbox-inner { position: relative; max-width: 92vw; max-height: 92vh; display: flex; flex-direction: column; gap: 0; border-radius: 10px; overflow: hidden; box-shadow: 0 24px 80px rgba(0,0,0,.6); background: var(--surface); transform: scale(.94); transition: transform .2s; }
+#lightbox.open #lightbox-inner { transform: scale(1); }
+#lightbox-bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+#lightbox-label { font-size: 13px; font-weight: 600; color: var(--text2); }
+#lightbox-close { background: none; border: none; color: var(--text3); font-size: 20px; cursor: pointer; line-height: 1; padding: 0 2px; transition: color .15s; }
+#lightbox-close:hover { color: var(--text); }
+#lightbox img { display: block; max-width: 92vw; max-height: calc(92vh - 44px); object-fit: contain; }
+.best-metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 14px 16px; }
+.bm-item { background: var(--surface2); border-radius: 6px; padding: 10px 12px; }
+.bm-name { font-size: 11px; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.bm-val { font-size: 20px; font-weight: 700; color: var(--text); font-family: 'JetBrains Mono', monospace; margin-top: 3px; }
+.bm-val.good { color: var(--green); }
+.bm-val.ok { color: var(--blue); }
+.bm-val.warn { color: var(--amber); }
+
+/* ── Empty / idle states ───────────────────────────────────── */
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100%; gap: 12px; color: var(--text3); text-align: center; padding: 40px;
+}
+.empty-icon { font-size: 48px; opacity: .4; }
+.empty-text { font-size: 14px; font-weight: 500; }
+.empty-sub { font-size: 12px; max-width: 300px; line-height: 1.6; }
+
+/* ── Scrollbars ────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+/* ── Misc utils ────────────────────────────────────────────── */
+.hidden { display: none !important; }
+.tag { display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; background: var(--surface2); color: var(--text3); }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ═══════════════════════ SIDEBAR ═══════════════════════ -->
+  <aside id="sidebar">
+    <div id="sidebar-inner">
+
+      <!-- Logo -->
+      <div class="sidebar-head">
+        <div class="sidebar-logo">
+          <div class="logo-icon">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="4" cy="6" r="2"/><circle cx="20" cy="6" r="2"/><circle cx="4" cy="18" r="2"/><circle cx="20" cy="18" r="2"/><line x1="6" y1="6" x2="10" y2="11"/><line x1="18" y1="6" x2="14" y2="11"/><line x1="6" y1="18" x2="10" y2="13"/><line x1="18" y1="18" x2="14" y2="13"/></svg>
+          </div>
+          <div>
+            <div class="logo-text">DR Design</div>
+            <div class="logo-sub">Agentic Pipeline</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dataset -->
+      <div class="section">
+        <div class="section-title">Dataset</div>
+        <div class="radio-group">
+          <div class="radio-btn active" id="radio-builtin" onclick="setDataMode('builtin')">Built-in</div>
+          <div class="radio-btn" id="radio-upload" onclick="setDataMode('upload')">Upload</div>
+        </div>
+        <div class="form-group">
+          <label for="experiment-name-input">Experiment name — optional</label>
+          <input type="text" id="experiment-name-input" placeholder="e.g. pbmc3k_umap_trial" />
+        </div>
+        <div id="builtin-section">
+          <div class="form-group">
+            <label for="dataset-select">Dataset</label>
+            <select id="dataset-select"><option value="">Loading…</option></select>
+          </div>
+        </div>
+        <div id="upload-section" class="hidden">
+          <div class="form-group">
+            <label>Data matrix (CSV or .npy)</label>
+            <div class="upload-zone" id="data-drop" onclick="document.getElementById('data-file').click()">
+              <input type="file" id="data-file" accept=".csv,.npy" onchange="setFile(this,'data-name')" />
+              <div>Click to upload data file</div>
+              <div class="upload-name" id="data-name"></div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Labels (CSV or .npy) — optional</label>
+            <div class="upload-zone" onclick="document.getElementById('labels-file').click()">
+              <input type="file" id="labels-file" accept=".csv,.npy" onchange="setFile(this,'labels-name')" />
+              <div>Click to upload labels file</div>
+              <div class="upload-name" id="labels-name"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LLM -->
+      <div class="section">
+        <div class="section-title">Language Model</div>
+        <div class="form-group">
+          <label for="provider-select">Provider</label>
+          <select id="provider-select" onchange="updateModelHint()">
+            <option value="google">Google</option>
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="deepseek">DeepSeek</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="model-input">Model</label>
+          <input type="text" id="model-input" value="gemini-3.1-pro-preview" placeholder="e.g. gemini-3.1-pro-preview" />
+        </div>
+        <div class="form-group">
+          <label for="apikey-input">API Key</label>
+          <input type="password" id="apikey-input" placeholder="Leave blank to use env var" />
+          <div class="key-hint" id="key-hint">Uses GEMINI_API_KEY env var if blank</div>
+        </div>
+      </div>
+
+      <!-- Algorithm -->
+      <div class="section">
+        <div class="section-title">Algorithm Settings</div>
+        <div class="form-group">
+          <label for="mode-select">Pipeline Mode</label>
+          <select id="mode-select" onchange="toggleDRMethodGroup()">
+            <option value="optimization">Standard Optimization (tune existing methods)</option>
+            <option value="novel">Novel Algorithm Generation (compose new methods)</option>
+            <option value="novelv2">Novel Algorithm Generation v2 (DR_Template_v2)</option>
+            <option value="all_llm">All LLM Algorithm Design (unconstrained)</option>
+            <option value="novelv2_skills">Skills Mode (novelv2 deterministic + single LLM context)</option>
+            <option value="allLLMv2">All LLM Algorithm Design v2 (DR_Template_v2)</option>
+            <option value="ablation">Ablation — Single-LLM blank prompt (no agents)</option>
+          </select>
+          <div style="font-size:11px;color:var(--text3);margin-top:3px;" id="mode-hint">
+            Standard: Hyperparameter optimization of t-SNE/UMAP/PaCMAP. Novel modes generate new algorithms instead of tuning a base DR method.
+          </div>
+        </div>
+        <div class="form-group" id="drmethod-group">
+          <label for="drmethod-select">DR Method</label>
+          <select id="drmethod-select">
+            <option value="tsne">t-SNE</option>
+            <option value="umap">UMAP</option>
+            <option value="pacmap">PaCMAP</option>
+            <option value="pca">PCA</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="goal-select">Primary Goal</label>
+          <select id="goal-select">
+            <option value="balance local and global structure — optimize a balance of Trustworthiness@k, Continuity@k, Spearman rank correlation, Silhouette Score, LOF Outlier %, and Stress; no single metric is prioritized above the others">Balance local &amp; global</option>
+            <option value="local structure - optimize a balance of Trustworthiness@k and Continuity@k (neighborhood preservation and recall) above all else; other metrics are secondary">Prioritise local structure</option>
+            <option value="global structure - optimize a balance of Spearman rank correlation (HD↔LD distance ranks) and Stress (global distance preservation) above all else; other metrics are secondary">Prioritise global structure</option>
+            <option value="maximum trustworthiness — optimize Trustworthiness@k (neighborhood preservation) above all else; other metrics are secondary">Maximum Trustworthiness</option>
+            <option value="maximum continuity — optimize Continuity@k (neighborhood recall) above all else; other metrics are secondary">Maximum Continuity</option>
+            <option value="maximum spearman — optimize Spearman rank correlation (HD↔LD distance ranks) above all else; other metrics are secondary">Maximum Spearman</option>
+            <option value="maximum silhouette — optimize cluster separation (Silhouette Score) above all else; other metrics are secondary">Maximum Silhouette</option>
+            <option value="maximum LOF preservation — minimize embedding outlier rate (LOF Outlier %) above all else; other metrics are secondary">Maximum LOF preservation (min outliers)</option>
+            <option value="minimum stress — optimize global distance preservation (lowest Stress) above all else; other metrics are secondary">Minimum Stress</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Convergence -->
+      <div class="section">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div class="section-title" style="margin-bottom:0">Convergence</div>
+          <label for="iter-opt-toggle" style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2);cursor:pointer;user-select:none">
+            <input type="checkbox" id="iter-opt-toggle" checked
+                   onchange="onIterOptToggle()"
+                   style="margin:0;cursor:pointer"
+                   title="When off, the pipeline runs once with default hyperparameters and skips Agent 6/7 optimisation." />
+            <span>Iterative optimisation</span>
+          </label>
+        </div>
+        <div class="input-row" id="convergence-inputs">
+          <div class="form-group">
+            <label for="maxiter-input">Max iterations</label>
+            <input type="number" id="maxiter-input" value="10" min="1" max="50" />
+          </div>
+          <div class="form-group">
+            <label for="target-input">Quality target</label>
+            <input type="number" id="target-input" value="9.0" min="0" max="10" step="0.1" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Run button -->
+      <div class="section">
+        <button class="btn-start" id="start-btn" onclick="startRun()">
+          <div class="btn-spinner"></div>
+          <span class="btn-label">▶ Start Pipeline</span>
+        </button>
+        <div style="margin-top:10px; display:flex; justify-content:center;">
+          <div class="run-chip" id="run-chip">
+            <div class="dot"></div>
+            <span id="run-chip-text">Idle</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Past Runs -->
+      <div class="section" id="past-runs-section">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div class="section-title" style="margin-bottom:0">Past Experiments</div>
+          <button id="past-runs-refresh" onclick="loadPastRuns()" title="Refresh list">↺ Refresh</button>
+        </div>
+        <div id="past-runs-loading">Loading…</div>
+        <div id="past-runs-list"></div>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- ═══════════════════════ MAIN ═════════════════════════ -->
+  <div id="main">
+
+    <!-- Header -->
+    <div id="main-header">
+      <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <line x1="1" y1="3" x2="13" y2="3"/><line x1="1" y1="7" x2="13" y2="7"/><line x1="1" y1="11" x2="13" y2="11"/>
+        </svg>
+      </button>
+      <div style="flex:1">
+        <div class="main-title">DR Design Pipeline</div>
+        <div class="main-sub">Agentic Dimensionality Reduction · Iterative LLM-guided optimisation</div>
+      </div>
+      <div id="header-run-info" style="display:none; text-align:right">
+        <div style="font-size:12px; font-weight:600; color:var(--text2)" id="header-run-id"></div>
+        <div style="font-size:11px; color:var(--text3)" id="header-elapsed"></div>
+      </div>
+    </div>
+
+    <!-- Phase progress bar -->
+    <div id="phase-bar">
+      <div class="phase-item">
+        <div class="phase-step" id="phase-1" data-phase="1">
+          <div class="phase-circle">1</div>
+          Data
+        </div>
+        <div class="phase-sep">›</div>
+      </div>
+      <div class="phase-item">
+        <div class="phase-step" id="phase-2" data-phase="2">
+          <div class="phase-circle">2</div>
+          Auxiliary
+        </div>
+        <div class="phase-sep">›</div>
+      </div>
+      <div class="phase-item">
+        <div class="phase-step" id="phase-3" data-phase="3">
+          <div class="phase-circle">3</div>
+          Algorithm
+        </div>
+        <div class="phase-sep">›</div>
+      </div>
+      <div class="phase-item">
+        <div class="phase-step" id="phase-4" data-phase="4">
+          <div class="phase-circle">4</div>
+          Optimise
+          <span class="phase-iter-badge" id="phase-4-iter"></span>
+        </div>
+        <div class="phase-sep">›</div>
+      </div>
+      <div class="phase-item">
+        <div class="phase-step" id="phase-5" data-phase="5">
+          <div class="phase-circle">5</div>
+          Synthesis
+        </div>
+        <div class="phase-sep">›</div>
+      </div>
+      <div class="phase-item">
+        <div class="phase-step" id="phase-6" data-phase="6">
+          <div class="phase-circle">6</div>
+          Forensics
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab bar -->
+    <div id="tab-bar">
+      <div class="tab active" data-tab="log" onclick="switchTab('log')">
+        Live Log
+      </div>
+      <div class="tab" data-tab="iterations" onclick="switchTab('iterations')">
+        Iterations <span class="tab-badge" id="tab-iter-badge">0</span>
+      </div>
+      <div class="tab" data-tab="agents" onclick="switchTab('agents')">
+        Agents
+      </div>
+      <div class="tab" data-tab="results" onclick="switchTab('results')">
+        Results
+      </div>
+    </div>
+
+    <!-- Tab content -->
+    <div id="tab-content">
+
+      <!-- LOG TAB -->
+      <div class="tab-panel active" id="panel-log">
+        <div id="agent-toolcall-pane" class="hidden" style="
+          border: 1px solid #555;
+          border-radius: 6px;
+          padding: 10px;
+          margin: 8px 12px 0 12px;
+          background: #1a1d1f;
+          max-height: 400px;
+          overflow-y: auto;
+          font-family: 'JetBrains Mono','Monaco','Menlo',monospace;
+          font-size: 12px;
+        ">
+          <div style="font-weight:bold;color:#aaa;margin-bottom:6px;">Agent tool-call timeline (Skills Mode)</div>
+          <div id="agent-toolcall-list"></div>
+        </div>
+        <div id="skill-stream-box" style="display:none;">
+          <div id="skill-stream-label">LLM stream (Skills Mode)</div>
+          <pre id="skill-stream-pane"></pre>
+        </div>
+        <div id="log-wrap">
+          <div class="log-empty">Pipeline output will appear here once you start a run.</div>
+        </div>
+      </div>
+
+      <!-- ITERATIONS TAB -->
+      <div class="tab-panel" id="panel-iterations">
+        <div id="iter-tab">
+          <div class="iter-summary">
+            <div class="summary-card">
+              <div class="summary-label">Total Iterations</div>
+              <div class="summary-val" id="sum-total">—</div>
+              <div class="summary-sub" id="sum-max"></div>
+            </div>
+            <div class="summary-card highlight">
+              <div class="summary-label">Best Score</div>
+              <div class="summary-val" id="sum-best">—</div>
+              <div class="summary-sub" id="sum-best-iter"></div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">Latest Score</div>
+              <div class="summary-val" id="sum-latest">—</div>
+              <div class="summary-sub">Agent 6 (implicit)</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">Quality Target</div>
+              <div class="summary-val" id="sum-target">—</div>
+              <div class="summary-sub" id="sum-reached"></div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">Quality Score Progression</div>
+            <div class="chart-wrap"><canvas id="score-chart"></canvas></div>
+          </div>
+          <div class="iter-grid" id="iter-grid">
+            <div class="empty-state">
+              <div class="empty-icon">📊</div>
+              <div class="empty-text">No iterations yet</div>
+              <div class="empty-sub">Start the pipeline to see iteration-by-iteration embedding visualisations and quality scores.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AGENTS TAB -->
+      <div class="tab-panel" id="panel-agents">
+        <div id="agents-tab">
+          <div id="agents-empty" class="empty-state">
+            <div class="empty-icon">🤖</div>
+            <div class="empty-text">No agent results yet</div>
+            <div class="empty-sub">Agent outputs will appear here as each phase completes.</div>
+          </div>
+          <div id="agents-list" class="hidden">
+            <!-- Phase groups injected by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- RESULTS TAB -->
+      <div class="tab-panel" id="panel-results">
+        <div id="results-tab">
+          <div id="results-empty" class="empty-state">
+            <div class="empty-icon">🔬</div>
+            <div class="empty-text">Results will appear here after the pipeline completes</div>
+            <div class="empty-sub">Final embedding, metrics, distortion heatmaps, dendrogram comparisons, and forensics analysis.</div>
+          </div>
+          <div id="results-content" class="hidden">
+            <div class="results-header" id="results-title">Pipeline Complete</div>
+            <div class="results-sub" id="results-sub"></div>
+            <div class="best-metrics-grid" id="best-metrics" style="margin-bottom:20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)"></div>
+            <div id="results-meta" class="results-grid" style="margin-bottom:14px"></div>
+            <div class="results-grid" id="results-plots"></div>
+            <div id="skill-log-host" style="margin-top:18px"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ JAVASCRIPT ════════════════════════ -->
+<script>
+/* ── State ────────────────────────────────────────────────── */
+const S = {
+  status: 'idle',
+  runId: null,
+  ws: null,
+  startTime: null,
+  timerInterval: null,
+  currentPhase: 0,
+  currentIter: 0,
+  maxIter: 10,
+  target: 8.0,
+  iterations: {},   // { n: { score, evalScore, metrics, plotUrl, agent6, agent7 } }
+  agentResults: {}, // { key: {agent, name, result} }
+  history: [],
+  skillLog: null,
+  scoreChart: null,
+  phaseGroups: {},  // { key: domElement }
+  hasFirstLog: false,
+};
+
+/* ── Init ─────────────────────────────────────────────────── */
+window.addEventListener('DOMContentLoaded', () => {
+  loadDatasets();
+  loadPastRuns();
+  initChart();
+  toggleDRMethodGroup();
+  document.getElementById('sum-target').textContent = '9.0';
+  setInterval(updateElapsed, 1000);
+});
+
+async function loadDatasets() {
+  try {
+    const r = await fetch('/api/datasets');
+    const ds = await r.json();
+    const sel = document.getElementById('dataset-select');
+    sel.innerHTML = '<option value="">Select a dataset…</option>';
+
+    // Group datasets by difficulty bracket; render Easy → Moderate → Hard.
+    const brackets = ['Easy', 'Moderate', 'Hard'];
+    const grouped = {Easy: [], Moderate: [], Hard: []};
+    ds.forEach(d => {
+      const bucket = brackets.includes(d.difficulty) ? d.difficulty : 'Moderate';
+      grouped[bucket].push(d);
+    });
+
+    let firstAvailable = '';
+    brackets.forEach(bracket => {
+      if (!grouped[bracket].length) return;
+      const og = document.createElement('optgroup');
+      og.label = `── ${bracket} ──`;          // unselectable group header
+      grouped[bracket].forEach(d => {
+        const o = document.createElement('option');
+        o.value = d.key;
+        const short = d.description.split('—')[0].trim();
+        const classLabel = typeof d.n_classes === 'number'
+          ? ` (${d.n_classes} classes)`
+          : '';
+        if (d.available === false) {
+          o.disabled = true;
+          const reason = d.unavailable_reason ? ` — unavailable: ${d.unavailable_reason}` : ' — unavailable';
+          o.textContent = `${d.key}  ·  ${short}${classLabel}${reason}`;
+        } else {
+          o.textContent = `${d.key}  ·  ${short}${classLabel}`;
+          if (!firstAvailable) firstAvailable = d.key;
+        }
+        og.appendChild(o);
+      });
+      sel.appendChild(og);
+    });
+
+    if (firstAvailable) sel.value = firstAvailable;
+  } catch(e) {
+    document.getElementById('dataset-select').innerHTML = '<option value="">Error loading datasets</option>';
+  }
+}
+
+/* ── Data mode ────────────────────────────────────────────── */
+function setDataMode(mode) {
+  document.getElementById('radio-builtin').classList.toggle('active', mode === 'builtin');
+  document.getElementById('radio-upload').classList.toggle('active', mode === 'upload');
+  document.getElementById('builtin-section').classList.toggle('hidden', mode !== 'builtin');
+  document.getElementById('upload-section').classList.toggle('hidden', mode === 'builtin');
+}
+
+function setFile(input, nameId) {
+  const f = input.files[0];
+  document.getElementById(nameId).textContent = f ? f.name : '';
+}
+
+/* ── Provider hint ────────────────────────────────────────── */
+const PROVIDER_DEFAULTS = {
+  google:    {model: 'gemini-3.1-pro-preview', envvar: 'GEMINI_API_KEY'},
+  openai:    {model: 'gpt-5.4',                envvar: 'OPENAI_API_KEY'},
+  anthropic: {model: 'claude-opus-4.7',        envvar: 'ANTHROPIC_API_KEY'},
+  deepseek:  {model: 'deepseek-v4-pro',        envvar: 'DEEPSEEK_API_KEY'},
+};
+function updateModelHint() {
+  const p = document.getElementById('provider-select').value;
+  const d = PROVIDER_DEFAULTS[p] || {model: '', envvar: 'API_KEY'};
+  document.getElementById('model-input').value = d.model;
+  document.getElementById('key-hint').textContent = `Uses ${d.envvar} env var if blank`;
+}
+
+const MODE_INFO = {
+  optimization: {
+    hint: 'Standard: Hyperparameter optimization of t-SNE/UMAP/PaCMAP. Novel modes generate new algorithms instead of tuning a base DR method.',
+    label: 'Standard Optimization',
+    shortLabel: null,
+  },
+  novel: {
+    hint: 'Novel mode creates entirely new algorithms from primitives — no base DR method needed.',
+    label: 'Novel Algorithm',
+    shortLabel: 'NOVEL',
+  },
+  novelv2: {
+    hint: 'Novel v2 uses DR_Template_v2 synthesis constraints: verified-code reuse, explicit dynamic-code scope, and fixed hyperparameter-selection policy.',
+    label: 'Novel Algorithm v2',
+    shortLabel: 'NOVEL V2',
+  },
+  all_llm: {
+    hint: 'All LLM mode: LLM designs any algorithm from scratch, spawning analysis sub-agents as needed. No primitive constraints. Most robust — always produces an embedding.',
+    label: 'All LLM Algorithm',
+    shortLabel: 'ALL LLM',
+  },
+  novelv2_skills: {
+    hint: 'Skills Mode v2: an autonomous LLM agent designs the algorithm by invoking skills (analyze-data, design-affinity, synthesize-algorithm, etc.) and compute tools (compute_baseline_calibration, validate_custom_code, etc.) on its own. Watch the tool-call timeline + LLM stream + thinking panes to see exactly what the agent is doing.',
+  },
+  allLLMv2: {
+    hint: 'All LLM v2 adds DR_Template_v2 design constraints around verified deterministic code, dynamic code boundaries, and explicit score/hyperparameter plans.',
+    label: 'All LLM Algorithm v2',
+    shortLabel: 'ALL LLM V2',
+  },
+  ablation: {
+    hint: 'Ablation mode: a single blank-prompt LLM call produces the entire algorithm. No planning agents, no data characterisation, no baseline feedback. Evaluation + forensics still run so results are comparable.',
+    label: 'Ablation (single LLM)',
+    shortLabel: 'ABLATION',
+  },
+};
+
+function isNovelMode(mode) {
+  return mode === 'novel' || mode === 'novelv2' || mode === 'novelv2_skills';
+}
+
+function isAllLLMMode(mode) {
+  return mode === 'all_llm' || mode === 'allLLMv2';
+}
+
+function isAblationMode(mode) {
+  return mode === 'ablation';
+}
+
+function isGeneratedAlgorithmMode(mode) {
+  return isNovelMode(mode) || isAllLLMMode(mode) || isAblationMode(mode);
+}
+
+function modeLabel(mode) {
+  return MODE_INFO[mode]?.label || 'Standard Optimization';
+}
+
+function modeShortLabel(mode, fallbackMethod) {
+  return MODE_INFO[mode]?.shortLabel || (fallbackMethod || '').toUpperCase();
+}
+
+function modeSubtitle(mode, subject, past = false) {
+  const suffix = past ? 'Past experiment' : (isNovelMode(mode)
+    ? (mode === 'novelv2' ? 'Template-v2 composition' : 'Primitive-based composition')
+    : isAllLLMMode(mode)
+      ? (mode === 'allLLMv2' ? 'Template-v2 guided design' : 'Baseline-compared design')
+      : isAblationMode(mode)
+        ? 'Single-LLM blank-prompt baseline'
+        : 'Iterative LLM-guided optimisation');
+  if (!isGeneratedAlgorithmMode(mode)) {
+    const method = (subject?.method || subject?.dr_method || 'tsne').toUpperCase();
+    return `${method} · ${subject?.name || subject?.dataset || subject?.runId || ''} · ${suffix}`;
+  }
+  return `${modeLabel(mode)} · ${subject?.name || subject?.dataset || subject?.runId || ''} · ${suffix}`;
+}
+
+function toggleDRMethodGroup() {
+  const mode = document.getElementById('mode-select').value;
+  const hideMethodSelector = isGeneratedAlgorithmMode(mode);
+  document.getElementById('drmethod-group').style.display = hideMethodSelector ? 'none' : '';
+  document.getElementById('mode-hint').textContent = MODE_INFO[mode]?.hint || MODE_INFO.optimization.hint;
+}
+
+/* ── Sidebar toggle ───────────────────────────────────────── */
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('collapsed');
+}
+
+/* ── Tabs ─────────────────────────────────────────────────── */
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `panel-${name}`));
+}
+
+/* ── Iterative-optimisation toggle ────────────────────────── */
+function onIterOptToggle() {
+  const enabled = document.getElementById('iter-opt-toggle').checked;
+  const inputs = document.getElementById('convergence-inputs');
+  inputs.style.opacity = enabled ? '' : '0.45';
+  inputs.style.pointerEvents = enabled ? '' : 'none';
+  document.getElementById('maxiter-input').disabled = !enabled;
+  document.getElementById('target-input').disabled = !enabled;
+}
+
+/* ── Start run ────────────────────────────────────────────── */
+async function startRun() {
+  const btn = document.getElementById('start-btn');
+  if (btn.disabled) return;
+
+  const isBuiltin = document.getElementById('radio-builtin').classList.contains('active');
+  const fd = new FormData();
+
+  if (isBuiltin) {
+    const ds = document.getElementById('dataset-select').value;
+    if (!ds) return alert('Please select a dataset.');
+    fd.append('dataset', ds);
+  } else {
+    const df = document.getElementById('data-file').files[0];
+    if (!df) return alert('Please upload a data file.');
+    fd.append('data_file', df);
+    const lf = document.getElementById('labels-file').files[0];
+    if (lf) fd.append('labels_file', lf);
+  }
+
+  fd.append('provider', document.getElementById('provider-select').value);
+  fd.append('model', document.getElementById('model-input').value);
+  fd.append('api_key', document.getElementById('apikey-input').value);
+  fd.append('experiment_name', document.getElementById('experiment-name-input').value.trim());
+  fd.append('mode', document.getElementById('mode-select').value);
+  const mode = document.getElementById('mode-select').value;
+  fd.append('dr_method', isGeneratedAlgorithmMode(mode) ? mode : document.getElementById('drmethod-select').value);
+  fd.append('primary_goal', document.getElementById('goal-select').value);
+  fd.append('max_iter', document.getElementById('maxiter-input').value);
+  fd.append('quality_target', document.getElementById('target-input').value);
+  fd.append('iterative_optimization', document.getElementById('iter-opt-toggle').checked ? 'true' : 'false');
+
+  S.maxIter = parseInt(document.getElementById('maxiter-input').value) || 10;
+  S.target = parseFloat(document.getElementById('target-input').value) || 9.0;
+  document.getElementById('sum-target').textContent = S.target.toFixed(1);
+  document.getElementById('sum-max').textContent = `of ${S.maxIter} max`;
+
+  btn.disabled = true;
+  btn.classList.add('loading');
+  btn.querySelector('.btn-label').textContent = 'Starting…';
+
+  resetUI();
+
+  try {
+    const resp = await fetch('/api/start', {method: 'POST', body: fd});
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.detail || 'Failed to start pipeline');
+    }
+    const {run_id} = await resp.json();
+    S.runId = run_id;
+    S.startTime = Date.now();
+    S.status = 'running';
+    document.getElementById('header-run-id').textContent = `Run: ${run_id}`;
+    document.getElementById('header-run-info').style.display = 'block';
+    setChip('running', 'Running…');
+    connectWS(run_id);
+  } catch(e) {
+    alert(`Error: ${e.message}`);
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    btn.querySelector('.btn-label').textContent = '▶ Start Pipeline';
+  }
+}
+
+/* ── WebSocket ────────────────────────────────────────────── */
+function connectWS(runId) {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws = new WebSocket(`${proto}//${location.host}/ws/${runId}`);
+  S.ws = ws;
+
+  ws.onmessage = e => {
+    try { handleEvent(JSON.parse(e.data)); }
+    catch(_) {}
+  };
+  ws.onerror = () => { setChip('error', 'Connection error'); };
+  ws.onclose = () => {
+    if (S.status === 'running') setChip('error', 'Disconnected');
+  };
+}
+
+/* ── Event dispatch ───────────────────────────────────────── */
+function handleEvent(ev) {
+  switch (ev.type) {
+    case 'init':    handleInit(ev.data); break;
+    case 'log':     handleLog(ev.data); break;
+    case 'plot':    handlePlot(ev.data); break;
+    case 'agent6':  handleAgent6(ev.data); break;
+    case 'agent7':  handleAgent7(ev.data); break;
+    case 'metrics': handleIterMetrics(ev.data); break;
+    case 'agent_result': handleAgentResult(ev.data); break;
+    case 'history': handleHistory(ev.data); break;
+    case 'skill_log': handleSkillLog(ev.data); break;
+    case 'skill_stream': handleSkillStream(ev.data); break;
+    case 'skill_thinking': handleSkillThinking(ev.data); break;
+    case 'tool_call': handleToolCall(ev.data); break;
+    case 'phase_plot': handlePhasePlot(ev.data); break;
+    case 'complete': handleComplete(ev.data); break;
+    case 'error':   handleError(ev.data); break;
+    case 'done':    handleDone(); break;
+  }
+}
+
+/* ── Handlers ─────────────────────────────────────────────── */
+function handleInit(d) {
+  const cfg = d.config || {};
+  const ds = d.dataset || {};
+  document.querySelector('.main-sub').textContent = modeSubtitle(cfg.mode, {
+    name: ds.name || d.run_id,
+    method: cfg.dr_method,
+  });
+}
+
+function handleLog(d) {
+  const line = d.line || '';
+  const level = d.level || 'info';
+  // First log clears the placeholder
+  if (!S.hasFirstLog) {
+    S.hasFirstLog = true;
+    document.getElementById('log-wrap').innerHTML = '';
+  }
+  // Recognize Skills-Mode stream markers and decorate the streaming pane.
+  // The breadcrumb still flows into the regular log pane below.
+  const beginMatch = line.match(/^\[skill stream begin\]\s+(.+)$/);
+  const endMatch = line.match(/^\[skill stream end\]\s+(.+)$/);
+  if (beginMatch) {
+    appendSkillStreamHeader(beginMatch[1]);
+  } else if (endMatch) {
+    appendSkillStreamFooter(endMatch[1]);
+  }
+  const thinkBegin = line.match(/^\[skill thinking begin\]\s+(.+)$/);
+  const thinkEnd = line.match(/^\[skill thinking end\]\s+(.+)$/);
+  if (thinkBegin) {
+    appendSkillThinkHeader(thinkBegin[1]);
+  } else if (thinkEnd) {
+    appendSkillThinkFooter(thinkEnd[1]);
+  }
+  const cls = classifyLogLine(line, level);
+  appendLog(line, cls);
+  detectPhaseFromLine(line);
+  detectIterFromLine(line);
+}
+
+/* ── Skill streaming pane (Skills Mode) ───────────────────── */
+function _skillStreamPane() {
+  const box = document.getElementById('skill-stream-box');
+  if (box && box.style.display === 'none') box.style.display = 'flex';
+  return document.getElementById('skill-stream-pane');
+}
+
+function _skillStreamScroll(pane) {
+  // Auto-scroll if user is near the bottom
+  if (pane.scrollHeight - pane.scrollTop < pane.clientHeight + 80) {
+    pane.scrollTop = pane.scrollHeight;
+  }
+}
+
+function appendSkillStreamHeader(name) {
+  const pane = _skillStreamPane();
+  const hdr = document.createElement('span');
+  hdr.className = 'stream-header';
+  hdr.textContent = '=== ' + name + ' ===';
+  pane.appendChild(hdr);
+  _skillStreamScroll(pane);
+}
+
+function appendSkillStreamFooter(text) {
+  const pane = _skillStreamPane();
+  const ftr = document.createElement('span');
+  ftr.className = 'stream-footer';
+  ftr.textContent = '--- ' + text + ' ---\n';
+  pane.appendChild(ftr);
+  _skillStreamScroll(pane);
+}
+
+function handleSkillStream(d) {
+  const chunk = d && d.chunk;
+  if (!chunk) return;
+  const pane = _skillStreamPane();
+  // Append as raw text node so token-level chunks concatenate cleanly
+  // and don't trigger an HTML reflow path per chunk.
+  pane.appendChild(document.createTextNode(chunk));
+  _skillStreamScroll(pane);
+}
+
+/* ── Reasoning/thinking content (dim italic) ──────────────── */
+function appendSkillThinkHeader(name) {
+  const pane = _skillStreamPane();
+  const hdr = document.createElement('span');
+  hdr.className = 'think-header';
+  hdr.textContent = '🧠 ── thinking: ' + name + ' ──';
+  pane.appendChild(hdr);
+  _skillStreamScroll(pane);
+}
+
+function appendSkillThinkFooter(text) {
+  const pane = _skillStreamPane();
+  const ftr = document.createElement('span');
+  ftr.className = 'think-footer';
+  ftr.textContent = '── /thinking: ' + text + ' ──\n';
+  pane.appendChild(ftr);
+  _skillStreamScroll(pane);
+}
+
+function handleSkillThinking(d) {
+  const chunk = d && d.chunk;
+  if (!chunk) return;
+  const pane = _skillStreamPane();
+  // Coalesce consecutive thinking chunks into a single dim-italic span so
+  // text wraps naturally and we don't pay one DOM node per token.
+  const last = pane.lastChild;
+  if (last && last.nodeType === 1 && last.classList.contains('think-text')) {
+    last.appendChild(document.createTextNode(chunk));
+  } else {
+    const sp = document.createElement('span');
+    sp.className = 'think-text';
+    sp.appendChild(document.createTextNode(chunk));
+    pane.appendChild(sp);
+  }
+  _skillStreamScroll(pane);
+}
+
+function classifyLogLine(line, level) {
+  if (level === 'warning') return 'warning';
+  if (level === 'error') return 'error';
+  if (/^\[agent\]/.test(line)) return 'agent';
+  if (/PHASE\s+\d/i.test(line)) return 'phase';
+  if (/Iteration\s+\d|── Iter/i.test(line)) return 'iter';
+  if (/implicit=|score=|quality_score/i.test(line)) return 'score';
+  if (/ERROR|Exception|Traceback/i.test(line)) return 'error';
+  if (/WARNING|⚠/i.test(line)) return 'warning';
+  if (/Saved:|→ /i.test(line)) return 'saved';
+  return '';
+}
+
+/* ── Agent tool-call timeline (Skills Mode v2) ────────────── */
+function handleToolCall(d) {
+  const pane = document.getElementById('agent-toolcall-pane');
+  const list = document.getElementById('agent-toolcall-list');
+  if (!pane || !list) return;
+  pane.classList.remove('hidden');
+  const ev = d.event;
+  const it = (d.iteration ?? '?');
+  const entry = document.createElement('div');
+  entry.style.padding = '4px 0';
+  entry.style.borderBottom = '1px solid #2a2d2f';
+  if (ev === 'call') {
+    entry.innerHTML =
+      '<span style="color:#8ab4f8;">→ <b>' + escHtml(d.tool_name || '') + '</b></span>' +
+      '<span style="color:#888;"> (iter ' + escHtml(String(it)) + ')</span>' +
+      '<pre style="color:#c9d1d9;margin:2px 0 0 12px;font-size:11px;white-space:pre-wrap;">' +
+      escHtml(JSON.stringify(d.arguments ?? {}, null, 2)) + '</pre>';
+  } else if (ev === 'result') {
+    const summary = d.result_summary;
+    let ok = true;
+    if (summary && typeof summary === 'object') {
+      if (summary.error_message) ok = false;
+      if (summary.ok === false) ok = false;
+    }
+    entry.innerHTML =
+      '<span style="color:' + (ok ? '#7ee787' : '#ff6b6b') + ';">← <i>' + escHtml(d.tool_name || '') + ' result</i></span>' +
+      '<span style="color:#888;"> (iter ' + escHtml(String(it)) + ')</span>' +
+      '<pre style="color:#999;margin:2px 0 0 12px;font-size:11px;white-space:pre-wrap;">' +
+      escHtml(JSON.stringify(summary, null, 2)) + '</pre>';
+  } else {
+    return;
+  }
+  list.appendChild(entry);
+  pane.scrollTop = pane.scrollHeight;
+}
+
+function appendLog(text, cls) {
+  const wrap = document.getElementById('log-wrap');
+  const now = new Date();
+  const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  const row = document.createElement('div');
+  row.className = `log-line${cls ? ' '+cls : ''}`;
+  row.innerHTML = `<span class="log-time">${ts}</span><span class="log-text">${escHtml(text)}</span>`;
+  wrap.appendChild(row);
+  // Auto-scroll if near bottom
+  if (wrap.scrollHeight - wrap.scrollTop < wrap.clientHeight + 100) {
+    wrap.scrollTop = wrap.scrollHeight;
+  }
+}
+
+function detectPhaseFromLine(line) {
+  const m = line.match(/PHASE\s+(\d)/i);
+  if (m) setPhase(parseInt(m[1]));
+}
+
+function detectIterFromLine(line) {
+  // Matches "── Iteration X of Y ──" pattern from planner
+  const m = line.match(/Iteration\s+(\d+)\s+of\s+(\d+)/i);
+  if (m) {
+    const n = parseInt(m[1]);
+    S.currentIter = n;
+    const badge = document.getElementById('phase-4-iter');
+    if (badge) badge.textContent = `${n}/${S.maxIter}`;
+    ensureIterCard(n);
+  }
+}
+
+function handleIterMetrics(d) {
+  const n = d.iteration;
+  ensureIterCard(n);
+  S.iterations[n] = S.iterations[n] || {};
+  S.iterations[n].metrics = d.metrics;
+  updateIterCardMetrics(n, d.metrics);
+  if (typeof d.implicit_score === 'number') {
+    S.iterations[n].score = d.implicit_score;
+    updateIterCardScore(n, d.implicit_score);
+    updateSummary();
+    updateScoreChart();
+  }
+}
+
+function handlePlot(d) {
+  const n = d.iteration;
+  ensureIterCard(n);
+  const card = getIterCard(n);
+  if (!card) return;
+  const img = card.querySelector('.iter-img');
+  const ph  = card.querySelector('.iter-plot-placeholder');
+  if (img && ph) {
+    img.src = d.url;
+    img.style.display = 'block';
+    ph.style.display = 'none';
+    img.onclick = () => openLightbox(`Iteration ${n} Embedding`, d.url);
+  }
+  S.iterations[n] = S.iterations[n] || {};
+  S.iterations[n].plotUrl = d.url;
+  // Auto-switch to iterations tab when first plot arrives
+  if (Object.keys(S.iterations).length === 1) switchTab('iterations');
+}
+
+function handleAgent6(d) {
+  const n = d.iteration;
+  const r = d.result || {};
+  ensureIterCard(n);
+  S.iterations[n] = S.iterations[n] || {};
+  S.iterations[n].agent6 = r;
+  const score = r.quality_score;
+  if (typeof score === 'number') {
+    S.iterations[n].score = score;
+    updateIterCardScore(n, score);
+    updateSummary();
+    updateScoreChart();
+  }
+  updateIterCardRationale(n, r);
+  // Add to agents tab as an iteration entry
+  upsertAgentIterEntry(n, 6, 'Hyperparameter Opt', r, score);
+}
+
+function handleAgent7(d) {
+  const n = d.iteration;
+  const r = d.result || {};
+  S.iterations[n] = S.iterations[n] || {};
+  S.iterations[n].agent7 = r;
+  const score = r.overall_assessment?.quality_score;
+  if (typeof score === 'number') {
+    S.iterations[n].evalScore = score;
+  }
+  upsertAgentIterEntry(n, 7, 'Visualisation Evaluator', r, score);
+}
+
+function handleAgentResult(d) {
+  const key = d.agent;
+  S.agentResults[key] = d;
+  document.getElementById('agents-empty').classList.add('hidden');
+  document.getElementById('agents-list').classList.remove('hidden');
+  upsertPhaseAgentEntry(d);
+}
+
+function handleHistory(d) {
+  S.history = d.history || [];
+  updateSummary();
+  updateScoreChart();
+  // update tab badge
+  document.getElementById('tab-iter-badge').textContent = S.history.length;
+  S.history.forEach(h => {
+    const n = h.iteration;
+    ensureIterCard(n);
+    S.iterations[n] = S.iterations[n] || {};
+    const snap = h.metrics_snapshot || {};
+    S.iterations[n].metrics = snap;
+    if (typeof h.implicit_score === 'number') S.iterations[n].score = h.implicit_score;
+    if (typeof h.evaluator_score === 'number') S.iterations[n].evalScore = h.evaluator_score;
+    updateIterCardMetrics(n, snap);
+    if (typeof h.implicit_score === 'number') updateIterCardScore(n, h.implicit_score);
+  });
+}
+
+async function handleSkillLog(d) {
+  try {
+    let summary = d.summary || null;
+    const runId = d.run_id || S.runId;
+    if (!summary && runId) {
+      const r = await fetch(`/api/run/${encodeURIComponent(runId)}/skills`);
+      if (r.ok) summary = await r.json();
+    }
+    if (!summary) return;
+    S.skillLog = summary;
+    await renderSkillLog(summary);
+    appendLog(`✓ Skill log captured (${summary.total_invocations || 0} invocations)`, 'saved');
+  } catch (e) {
+    appendLog(`WARNING: could not load skill log (${e.message})`, 'warning');
+  }
+}
+
+function handlePhasePlot(d) {
+  showResultPlot(d.label || d.name, d.url);
+  // also show result content
+  document.getElementById('results-empty').classList.add('hidden');
+  document.getElementById('results-content').classList.remove('hidden');
+}
+
+function handleComplete(d) {
+  S.status = 'complete';
+  setChip('complete', 'Complete');
+  setPhase(6); // mark all as done
+  markAllPhasesDone();
+  const btn = document.getElementById('start-btn');
+  btn.disabled = false;
+  btn.classList.remove('loading');
+  btn.querySelector('.btn-label').textContent = '▶ Start New Run';
+  document.getElementById('results-empty').classList.add('hidden');
+  document.getElementById('results-content').classList.remove('hidden');
+  updateResultsSummary();
+}
+
+function handleError(d) {
+  S.status = 'error';
+  setChip('error', 'Error');
+  appendLog(`ERROR: ${d.message}`, 'error');
+  const btn = document.getElementById('start-btn');
+  btn.disabled = false;
+  btn.classList.remove('loading');
+  btn.querySelector('.btn-label').textContent = '▶ Start Pipeline';
+}
+
+function handleDone() {
+  // Final flush complete
+}
+
+/* ── Phase management ─────────────────────────────────────── */
+function setPhase(n) {
+  if (n === S.currentPhase) return;
+  // Mark previous phases as done
+  for (let i = 1; i < n; i++) {
+    const el = document.getElementById(`phase-${i}`);
+    if (el && !el.classList.contains('done')) {
+      el.classList.remove('active');
+      el.classList.add('done');
+      el.querySelector('.phase-circle').textContent = '✓';
+    }
+  }
+  // Mark current as active
+  const cur = document.getElementById(`phase-${n}`);
+  if (cur) {
+    cur.classList.remove('done');
+    cur.classList.add('active');
+  }
+  S.currentPhase = n;
+  // Mark phase 4 agent group as done when the pipeline moves past it
+  if (n > 4) _markAgentGroupDone('p4');
+}
+
+function _markAgentGroupDone(phaseKey) {
+  const st = document.getElementById(`grp-status-${phaseKey}`);
+  if (st) { st.className = 'phase-group-status done'; st.textContent = 'Done'; }
+}
+
+function markAllPhasesDone() {
+  for (let i = 1; i <= 6; i++) {
+    const el = document.getElementById(`phase-${i}`);
+    if (el) {
+      el.classList.remove('active');
+      el.classList.add('done');
+      el.querySelector('.phase-circle').textContent = '✓';
+    }
+  }
+  // Also mark all agent group statuses as done
+  ['p1','p2','p3','p4','p5','p6'].forEach(k => _markAgentGroupDone(k));
+}
+
+/* ── Iteration cards ──────────────────────────────────────── */
+function ensureIterCard(n) {
+  if (document.getElementById(`iter-card-${n}`)) return;
+  const grid = document.getElementById('iter-grid');
+  // Clear empty state on first card
+  const empty = grid.querySelector('.empty-state');
+  if (empty) empty.remove();
+
+  const card = document.createElement('div');
+  card.className = 'iter-card';
+  card.id = `iter-card-${n}`;
+  card.innerHTML = `
+    <div class="iter-card-head">
+      <span class="iter-num-label">Iteration ${n}</span>
+      <span class="iter-score-badge" id="iter-score-${n}">…</span>
+    </div>
+    <div class="iter-plot-wrap">
+      <img class="iter-img" src="" alt="Embedding iteration ${n}" />
+      <div class="iter-plot-placeholder">
+        <div class="plot-spinner"></div>
+        <span>Generating…</span>
+      </div>
+    </div>
+    <div class="iter-metrics" id="iter-metrics-${n}">
+      ${metricRowsPlaceholder()}
+    </div>
+    <div class="iter-rationale">
+      <div class="iter-rat-toggle" id="rat-toggle-${n}" onclick="toggleRationale(${n})">
+        <span>Agent 6 Assessment</span>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="iter-rat-body" id="rat-body-${n}">
+        <div style="color:var(--text3);font-size:12px">Waiting for results…</div>
+      </div>
+    </div>`;
+  grid.appendChild(card);
+  S.iterations[n] = S.iterations[n] || {};
+}
+
+function getIterCard(n) {
+  return document.getElementById(`iter-card-${n}`);
+}
+
+function metricRowsPlaceholder() {
+  return ['Trust','Cont','Spear','Silh','Stress','LOF'].map(k =>
+    `<div class="metric-item"><span class="metric-name">${k}</span><span class="metric-val" id="m-${k}-—">—</span></div>`
+  ).join('');
+}
+
+function updateIterCardScore(n, score) {
+  const el = document.getElementById(`iter-score-${n}`);
+  if (!el) return;
+  const s = parseFloat(score);
+  el.textContent = s.toFixed(1);
+  el.className = 'iter-score-badge ' + (s >= 9 ? 'great' : s >= 7.5 ? 'good' : s >= 5 ? 'mid' : 'low');
+  // Mark best card
+  const bestScore = Math.max(...Object.values(S.iterations).map(it => it.score || 0));
+  document.querySelectorAll('.iter-card').forEach(c => c.classList.remove('best-card'));
+  const bestN = Object.entries(S.iterations).find(([,v]) => v.score === bestScore)?.[0];
+  if (bestN) {
+    const bc = document.getElementById(`iter-card-${bestN}`);
+    if (bc) { bc.classList.add('best-card'); }
+    // Add best badge to header
+    document.querySelectorAll('.best-badge').forEach(b => b.remove());
+    const head = bc?.querySelector('.iter-num-label');
+    if (head) head.innerHTML = `Iteration ${bestN}<span class="best-badge">BEST</span>`;
+  }
+}
+
+function updateIterCardMetrics(n, snap) {
+  const el = document.getElementById(`iter-metrics-${n}`);
+  if (!el || !snap) return;
+  const fmt = v => v !== null && v !== undefined ? parseFloat(v).toFixed(3) : '—';
+  el.innerHTML = `
+    <div class="metric-item"><span class="metric-name">Trust</span><span class="metric-val">${fmt(snap.Trustworthiness)}</span></div>
+    <div class="metric-item"><span class="metric-name">Cont</span><span class="metric-val">${fmt(snap.Continuity)}</span></div>
+    <div class="metric-item"><span class="metric-name">Spearman</span><span class="metric-val">${fmt(snap.Spearman)}</span></div>
+    <div class="metric-item"><span class="metric-name">Silhouette</span><span class="metric-val">${fmt(snap.Silhouette)}</span></div>
+    <div class="metric-item"><span class="metric-name">Stress</span><span class="metric-val">${fmt(snap.Stress)}</span></div>
+    <div class="metric-item"><span class="metric-name">LOF</span><span class="metric-val">${fmt(snap.LOF_Median)}</span></div>`;
+}
+
+function updateIterCardRationale(n, r) {
+  const body = document.getElementById(`rat-body-${n}`);
+  if (!body) return;
+  const recs = r.recommendations || [];
+  const weaknesses = r.overall_assessment?.key_weaknesses || [];
+  const rationale = r.score_rationale || '';
+  let html = '';
+  if (rationale) {
+    html += `<div class="rat-section"><div class="rat-section-title">Assessment</div><div style="color:var(--text2);font-size:12px;line-height:1.6">${escHtml(rationale)}</div></div>`;
+  }
+  if (weaknesses.length) {
+    html += `<div class="rat-section"><div class="rat-section-title">Key Weaknesses</div>`;
+    weaknesses.forEach(w => {
+      html += `<div style="font-size:12px;color:var(--text2);margin-bottom:3px;padding-left:8px;border-left:2px solid var(--red-dim)">· ${escHtml(String(w))}</div>`;
+    });
+    html += '</div>';
+  }
+  if (recs.length) {
+    html += `<div class="rat-section"><div class="rat-section-title">Recommendations</div>`;
+    recs.forEach(rec => {
+      const prio = rec.priority || 'low';
+      html += `<div class="rec-item">
+        <span class="rec-param">${escHtml(rec.parameter || '')}</span>
+        <span class="rec-arrow">→</span>
+        <span class="rec-val">${escHtml(String(rec.suggested_value || ''))}</span>
+        <span class="rec-priority ${prio}">${prio}</span>
+      </div>`;
+    });
+    html += '</div>';
+  }
+  body.innerHTML = html || '<div style="color:var(--text3);font-size:12px">No details available.</div>';
+}
+
+function toggleRationale(n) {
+  const toggle = document.getElementById(`rat-toggle-${n}`);
+  const body   = document.getElementById(`rat-body-${n}`);
+  if (!toggle || !body) return;
+  toggle.classList.toggle('open');
+  body.classList.toggle('open');
+}
+
+/* ── Summary stats ────────────────────────────────────────── */
+function updateSummary() {
+  const its = Object.values(S.iterations);
+  const scores = its.map(i => i.score).filter(s => typeof s === 'number');
+  if (!scores.length) return;
+  const total = scores.length;
+  const best  = Math.max(...scores);
+  const latest = scores[scores.length - 1];
+  const bestN  = Object.entries(S.iterations).find(([,v]) => v.score === best)?.[0];
+  document.getElementById('sum-total').textContent = total;
+  document.getElementById('sum-best').textContent = best.toFixed(2);
+  document.getElementById('sum-best-iter').textContent = `Iteration ${bestN}`;
+  document.getElementById('sum-latest').textContent = latest.toFixed(2);
+  const reached = best >= S.target;
+  document.getElementById('sum-reached').textContent = reached ? '✓ Target reached' : 'Not yet reached';
+  document.getElementById('sum-reached').style.color = reached ? 'var(--green)' : 'var(--text3)';
+  document.getElementById('tab-iter-badge').textContent = total;
+}
+
+/* ── Score chart ──────────────────────────────────────────── */
+function initChart() {
+  const ctx = document.getElementById('score-chart').getContext('2d');
+  S.scoreChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: 'Agent 6 (optimizer)',
+          data: [], borderColor: '#1D4ED8', backgroundColor: 'rgba(29,78,216,.08)',
+          borderWidth: 2, pointRadius: 4, pointBackgroundColor: '#1D4ED8',
+          tension: 0.3, fill: true,
+        },
+        {
+          label: 'Agent 7 (evaluator)',
+          data: [], borderColor: '#64748B', backgroundColor: 'rgba(100,116,139,.0)',
+          borderWidth: 1.5, pointRadius: 3, pointBackgroundColor: '#64748B',
+          tension: 0.3, borderDash: [5,3], fill: false,
+        },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: { font: {size:11, family:'Inter'}, boxWidth:12, padding:16 } },
+        tooltip: { mode: 'index', intersect: false },
+        annotation: {
+          annotations: {
+            target: {
+              type: 'line', yMin: S.target, yMax: S.target,
+              borderColor: 'rgba(21,128,61,.5)', borderWidth: 1, borderDash: [4,3],
+              label: { content: 'target', display: true, font: {size:10}, position: 'end' },
+            }
+          }
+        }
+      },
+      scales: {
+        x: { grid: {color:'rgba(0,0,0,.04)'}, ticks: {font:{size:11, family:'Inter'}} },
+        y: {
+          min: 0, max: 10, grid: {color:'rgba(0,0,0,.04)'},
+          ticks: {font:{size:11, family:'Inter'}},
+        }
+      }
+    }
+  });
+  // Draw target line as a dataset instead (annotation plugin not included)
+  S.scoreChart.data.datasets.push({
+    label: `Target (${S.target})`,
+    data: [],
+    borderColor: 'rgba(21,128,61,.5)', borderWidth: 1, borderDash: [5,3],
+    pointRadius: 0, fill: false, tension: 0,
+  });
+}
+
+function updateScoreChart() {
+  if (!S.scoreChart) return;
+  const sorted = Object.entries(S.iterations)
+    .map(([n, it]) => ({n: parseInt(n), score: it.score, eval: it.evalScore}))
+    .sort((a,b) => a.n - b.n);
+  const labels = sorted.map(i => `Iter ${i.n}`);
+  const scores = sorted.map(i => i.score ?? null);
+  const evals  = sorted.map(i => i.eval ?? null);
+  const targetLine = sorted.map(() => S.target);
+  S.scoreChart.data.labels = labels;
+  S.scoreChart.data.datasets[0].data = scores;
+  S.scoreChart.data.datasets[1].data = evals;
+  S.scoreChart.data.datasets[2].data = targetLine;
+  S.scoreChart.data.datasets[2].label = `Target (${S.target})`;
+  S.scoreChart.update();
+}
+
+/* ── Agents tab ───────────────────────────────────────────── */
+const PHASE_DEFS = [
+  {key:'p1', icon:'📊', title:'Phase 1 — Data Characterisation', agents: ['1']},
+  {key:'p2', icon:'🔍', title:'Phase 2 — Auxiliary Analysis',    agents: ['2','3','4','5']},
+  {key:'p3', icon:'🏗️', title:'Phase 3 — Initial Algorithm Design', agents: ['8i']},
+  {key:'p4', icon:'🔄', title:'Phase 4 — Iterative Optimisation', agents: [], dynamic: true},
+  {key:'p5', icon:'✅', title:'Phase 5 — Final Synthesis',       agents: ['8f']},
+  {key:'p6', icon:'🔬', title:'Phase 6 — Visual Forensics',      agents: ['9']},
+];
+
+function getOrCreatePhaseGroup(phaseKey) {
+  if (S.phaseGroups[phaseKey]) return S.phaseGroups[phaseKey];
+  const pdef = PHASE_DEFS.find(p => p.key === phaseKey);
+  if (!pdef) return null;
+  const list = document.getElementById('agents-list');
+  const grp = document.createElement('div');
+  grp.className = 'phase-group';
+  grp.id = `phase-grp-${phaseKey}`;
+  grp.innerHTML = `
+    <div class="phase-group-head" onclick="toggleGroup('${phaseKey}')">
+      <span class="phase-group-icon">${pdef.icon}</span>
+      <span class="phase-group-title">${pdef.title}</span>
+      <span class="phase-group-status pending" id="grp-status-${phaseKey}">Pending</span>
+      <span class="phase-group-chevron">▼</span>
+    </div>
+    <div class="phase-group-body" id="grp-body-${phaseKey}"></div>`;
+
+  // Insert in correct phase order instead of always appending
+  const myIdx = PHASE_DEFS.indexOf(pdef);
+  let inserted = false;
+  for (let i = myIdx + 1; i < PHASE_DEFS.length; i++) {
+    const laterGrp = S.phaseGroups[PHASE_DEFS[i].key];
+    if (laterGrp) {
+      list.insertBefore(grp, laterGrp);
+      inserted = true;
+      break;
+    }
+  }
+  if (!inserted) list.appendChild(grp);
+
+  S.phaseGroups[phaseKey] = grp;
+  return grp;
+}
+
+function toggleGroup(key) {
+  const head = document.querySelector(`#phase-grp-${key} .phase-group-head`);
+  const body = document.getElementById(`grp-body-${key}`);
+  if (!head || !body) return;
+  head.classList.toggle('open');
+  body.classList.toggle('open');
+}
+
+const AGENT_TO_PHASE = {
+  '1':'p1', '2':'p2', '3':'p2', '4':'p2', '5':'p2',
+  '7':'p4', '8i':'p3', '8f':'p5', '9':'p6',
+};
+const AGENT_NAMES = {
+  '1':'Data Characterisation',
+  '2':'Difficulty Analysis',
+  '3':'Neighbourhood Analysis',
+  '4':'Patch Stitching',
+  '5':'Outlier Identification',
+  '7':'Novelty Validation',
+  '8i':'Initial Algorithm Design',
+  '8f':'Final Synthesis',
+  '9':'Visual Forensics',
+};
+
+function upsertPhaseAgentEntry(d) {
+  const phaseKey = AGENT_TO_PHASE[d.agent];
+  if (!phaseKey) return;
+  const grp = getOrCreatePhaseGroup(phaseKey);
+  const body = document.getElementById(`grp-body-${phaseKey}`);
+  const status = document.getElementById(`grp-status-${phaseKey}`);
+  if (status) { status.className = 'phase-group-status done'; status.textContent = 'Done'; }
+  // Auto-expand when first result arrives
+  const head = grp.querySelector('.phase-group-head');
+  const gbody = grp.querySelector('.phase-group-body');
+  if (!head.classList.contains('open')) { head.classList.add('open'); gbody.classList.add('open'); }
+
+  const entryId = `agent-entry-${phaseKey}-${d.agent}`;
+  if (document.getElementById(entryId)) return; // already present
+  const entry = document.createElement('div');
+  entry.className = 'agent-entry';
+  entry.id = entryId;
+  const name = AGENT_NAMES[d.agent] || d.name || `Agent ${d.agent}`;
+  entry.innerHTML = `
+    <div class="agent-entry-head" onclick="toggleAgentEntry('${entryId}')">
+      <span class="agent-name">Agent ${agentNum(d.agent)} — ${name}</span>
+      <span class="agent-score" style="color:var(--green)">✓ Done</span>
+      <span style="color:var(--text3);font-size:11px;margin-left:6px">▼</span>
+    </div>
+    <div class="agent-entry-body" id="body-${entryId}">
+      <div class="agent-json">${syntaxHighlight(d.result)}</div>
+    </div>`;
+  body.appendChild(entry);
+}
+
+function agentNum(key) {
+  return key === '8i' ? '8a' : key === '8f' ? '8b' : key;
+}
+
+function upsertAgentIterEntry(n, agentId, name, result, score) {
+  const phaseKey = 'p4';
+  const grp = getOrCreatePhaseGroup(phaseKey);
+  const body = document.getElementById(`grp-body-${phaseKey}`);
+  const status = document.getElementById(`grp-status-${phaseKey}`);
+  if (status) { status.className = 'phase-group-status running'; status.textContent = 'Running'; }
+  const head = grp.querySelector('.phase-group-head');
+  const gbody = grp.querySelector('.phase-group-body');
+
+  const entryId = `agent-entry-p4-iter${n}-a${agentId}`;
+  if (document.getElementById(entryId)) return;
+
+  // Create iteration sub-group if not existing
+  let iterGroup = document.getElementById(`iter-grp-p4-${n}`);
+  if (!iterGroup) {
+    iterGroup = document.createElement('div');
+    iterGroup.id = `iter-grp-p4-${n}`;
+    iterGroup.style.borderBottom = '1px solid var(--border)';
+    iterGroup.innerHTML = `<div style="padding:9px 16px 9px 20px;font-size:12px;font-weight:700;color:var(--text2);background:var(--surface2);display:flex;align-items:center;gap:8px">
+      <span>Iteration ${n}</span></div>`;
+    body.appendChild(iterGroup);
+  }
+  const scoreStr = typeof score === 'number' ? score.toFixed(2) : '…';
+  const entry = document.createElement('div');
+  entry.className = 'agent-entry';
+  entry.id = entryId;
+  entry.innerHTML = `
+    <div class="agent-entry-head" onclick="toggleAgentEntry('${entryId}')">
+      <span class="agent-name">Agent ${agentId} — ${name}</span>
+      <span class="agent-score" style="color:var(--blue)">${scoreStr}</span>
+      <span style="color:var(--text3);font-size:11px;margin-left:6px">▼</span>
+    </div>
+    <div class="agent-entry-body" id="body-${entryId}">
+      <div class="agent-json">${syntaxHighlight(result)}</div>
+    </div>`;
+  iterGroup.appendChild(entry);
+  if (!head.classList.contains('open')) { head.classList.add('open'); gbody.classList.add('open'); }
+}
+
+function toggleAgentEntry(id) {
+  const body = document.getElementById(`body-${id}`);
+  if (body) body.classList.toggle('open');
+  const head = document.querySelector(`#${id} .agent-entry-head`);
+  if (head) {
+    const chev = head.querySelector('span:last-child');
+    if (chev) chev.textContent = body?.classList.contains('open') ? '▲' : '▼';
+  }
+}
+
+/* ── Past runs ────────────────────────────────────────────── */
+async function loadPastRuns() {
+  const list = document.getElementById('past-runs-list');
+  const loading = document.getElementById('past-runs-loading');
+  loading.style.display = 'block';
+  loading.textContent = 'Loading…';
+  list.innerHTML = '';
+  try {
+    const r = await fetch('/api/runs');
+    if (!r.ok) throw new Error(r.statusText);
+    const runs = await r.json();
+    loading.style.display = 'none';
+    const pastRuns = runs.filter(r => r.past);
+    if (!pastRuns.length) {
+      list.innerHTML = '<div style="font-size:12px;color:var(--text3)">No past experiments found.</div>';
+      return;
+    }
+    pastRuns.forEach(run => {
+      const item = document.createElement('div');
+      item.className = 'past-run-item';
+      item.id = `past-run-${run.run_id}`;
+      item.innerHTML = `
+        <div class="past-run-dot"></div>
+        <div class="past-run-info">
+          <div class="past-run-id">${escHtml(run.run_id)}</div>
+        </div>`;
+      item.addEventListener('click', () => loadPastRun(run.run_id, item));
+      list.appendChild(item);
+    });
+  } catch(e) {
+    loading.style.display = 'block';
+    loading.textContent = 'Failed to load.';
+  }
+}
+
+async function loadPastRun(runId, itemEl) {
+  // Highlight active item
+  document.querySelectorAll('.past-run-item').forEach(el => el.classList.remove('active'));
+  if (itemEl) itemEl.classList.add('active');
+
+  // Reset UI to a clean state (but without the "starting" labels)
+  resetUI();
+  S.runId = runId;
+  S.status = 'complete';
+
+  document.getElementById('header-run-id').textContent = runId;
+  document.getElementById('header-run-info').style.display = 'block';
+  document.getElementById('header-elapsed').textContent = 'Past run';
+  setChip('complete', 'Loaded');
+  document.getElementById('start-btn').querySelector('.btn-label').textContent = '▶ Start New Run';
+  document.getElementById('start-btn').disabled = false;
+  document.getElementById('start-btn').classList.remove('loading');
+
+  // Clear placeholder text
+  document.getElementById('log-wrap').innerHTML =
+    '<div class="log-line phase"><span class="log-time">--:--:--</span><span class="log-text">Loading past run ' + escHtml(runId) + '…</span></div>';
+
+  try {
+    const r = await fetch(`/api/run/${encodeURIComponent(runId)}/snapshot`);
+    if (!r.ok) throw new Error('Snapshot fetch failed');
+    const snap = await r.json();
+
+    const cfg = snap.config || {};
+    S.maxIter = cfg.max_iter || 10;
+    S.target  = cfg.quality_target || 9.0;
+    if (cfg.iterative_optimization === false) {
+      const t = document.getElementById('iter-opt-toggle');
+      if (t) { t.checked = false; onIterOptToggle(); }
+    }
+    document.getElementById('sum-target').textContent = S.target.toFixed(1);
+    document.getElementById('sum-max').textContent    = `of ${S.maxIter} max`;
+
+    document.querySelector('.main-sub').textContent = modeSubtitle(cfg.mode, {
+      dataset: cfg.dataset || runId,
+      dr_method: cfg.dr_method,
+    }, true);
+
+    // Enrich sidebar item with config metadata now that we have it
+    if (itemEl) {
+      const method = modeShortLabel(cfg.mode, cfg.dr_method);
+      const ds = cfg.dataset || '';
+      const meta = [method, ds].filter(Boolean).join(' · ');
+      const infoEl = itemEl.querySelector('.past-run-info');
+      if (infoEl && meta) {
+        infoEl.innerHTML = `<div class="past-run-id">${escHtml(runId)}</div><div class="past-run-meta">${escHtml(meta)}</div>`;
+      }
+    }
+
+    // Replay events in order
+    for (const ev of snap.events) {
+      handleEvent(ev);
+    }
+
+    // Skill logs live outside the run snapshot directory, so load them separately
+    await handleSkillLog({run_id: runId});
+
+    // Finalize UI state
+    markAllPhasesDone();
+    document.getElementById('results-empty').classList.add('hidden');
+    document.getElementById('results-content').classList.remove('hidden');
+    updateResultsSummary();
+    appendLog(`✓ Past run ${runId} loaded (${snap.events.length} events)`, 'saved');
+  } catch(e) {
+    appendLog(`ERROR loading past run: ${e.message}`, 'error');
+  }
+}
+
+/* ── Results tab ──────────────────────────────────────────── */
+const PLOT_ORDER = [
+  ['phase1_data_overview','Data Overview'],
+  ['phase2a_difficulty_map','Difficulty Map'],
+  ['phase2b_outlier_map','Outlier Map'],
+  ['phase4_convergence','Convergence Curve'],
+  ['phase6_distortion_heatmap','Distortion Heatmap'],
+  ['phase6_highlighted_areas','Highlighted Areas'],
+  ['phase6_class_distortion','Class Distortion'],
+  ['phase6_dendrogram_comparison','Dendrogram Comparison'],
+  ['phase6_hierarchy_changes','Hierarchy Changes'],
+];
+
+const _shownPlots = new Set();
+function showResultPlot(label, url) {
+  if (_shownPlots.has(url)) return;
+  _shownPlots.add(url);
+  const grid = document.getElementById('results-plots');
+  const card = document.createElement('div');
+  card.className = 'result-card';
+  card.innerHTML = `<div class="result-card-title">${escHtml(label)}</div><img src="${url}" alt="${escHtml(label)}" loading="lazy" />`;
+  card.addEventListener('click', () => openLightbox(label, url));
+  grid.appendChild(card);
+}
+
+async function renderSkillLog(summary) {
+  const host = document.getElementById('skill-log-host');
+  if (!host) return;
+  const topAgents = Object.entries(summary.invocations_by_agent || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4);
+  const topSkills = Object.entries(summary.invocations_by_skill || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4);
+
+  let card = document.getElementById('skill-log-card');
+  if (!card) {
+    card = document.createElement('div');
+    card.className = 'result-card static';
+    card.id = 'skill-log-card';
+    card.style.maxWidth = '100%';
+    host.appendChild(card);
+  }
+
+  card.innerHTML = `
+    <div class="result-card-title">Skill Usage Log</div>
+    <div class="result-card-body">
+      <div class="skill-grid">
+        <div class="skill-stat"><div class="skill-stat-name">Total Invocations</div><div class="skill-stat-val">${summary.total_invocations ?? '—'}</div></div>
+        <div class="skill-stat"><div class="skill-stat-name">Superpowers</div><div class="skill-stat-val">${summary.invocations_by_type?.superpowers ?? 0}</div></div>
+        <div class="skill-stat"><div class="skill-stat-name">PUA Invocations</div><div class="skill-stat-val">${summary.invocations_by_type?.pua ?? 0}</div></div>
+        <div class="skill-stat"><div class="skill-stat-name">Run ID</div><div class="skill-stat-val" style="font-size:13px">${escHtml(summary.run_id || S.runId || '—')}</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Top Agents</div>
+          <div class="skill-list">
+            ${topAgents.map(([name, count]) => `<div class="skill-line"><strong>${escHtml(name)}</strong><span>${count}</span></div>`).join('') || '<div class="skill-line"><strong>No agent data</strong><span>—</span></div>'}
+          </div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Top Skills</div>
+          <div class="skill-list">
+            ${topSkills.map(([name, count]) => `<div class="skill-line"><strong>${escHtml(name)}</strong><span>${count}</span></div>`).join('') || '<div class="skill-line"><strong>No skill data</strong><span>—</span></div>'}
+          </div>
+        </div>
+      </div>
+      <details class="skill-json">
+        <summary>View full skill log JSON</summary>
+        <pre>${syntaxHighlight(summary)}</pre>
+      </details>
+    </div>`;
+
+  document.getElementById('results-empty').classList.add('hidden');
+  document.getElementById('results-content').classList.remove('hidden');
+}
+
+function openLightbox(label, url) {
+  document.getElementById('lightbox-label').textContent = label;
+  document.getElementById('lightbox-img').src = url;
+  document.getElementById('lightbox').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox(e) {
+  if (e && e.target !== document.getElementById('lightbox') && e.target !== document.getElementById('lightbox-close')) return;
+  document.getElementById('lightbox').classList.remove('open');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { document.getElementById('lightbox').classList.remove('open'); document.body.style.overflow = ''; } });
+
+function updateResultsSummary() {
+  const hist = S.history;
+  if (!hist.length) return;
+  const bestEntry = hist.reduce((best, h) =>
+    (h.implicit_score > (best.implicit_score || 0)) ? h : best, hist[0]);
+  const snap = bestEntry.metrics_snapshot || {};
+  const n = bestEntry.iteration;
+  document.getElementById('results-title').textContent = `Pipeline Complete — Best at Iteration ${n}`;
+  const cfg = S.iterations[n];
+  document.getElementById('results-sub').textContent =
+    `Quality score: ${(bestEntry.implicit_score||0).toFixed(2)} / 10  ·  ${hist.length} iterations completed`;
+
+  const mDefs = [
+    {key:'Trustworthiness', label:'Trustworthiness', good: v => v > 0.9},
+    {key:'Continuity',      label:'Continuity',       good: v => v > 0.9},
+    {key:'Spearman',        label:'Spearman',          good: v => v > 0.7},
+    {key:'Silhouette',      label:'Silhouette',        good: v => v > 0.5},
+    {key:'Stress',          label:'Stress',            good: v => v < 1.0, warn: v => v > 1.5},
+    {key:'LOF_Median',      label:'LOF Median',        good: v => v < 1.05},
+  ];
+  const grid = document.getElementById('best-metrics');
+  grid.innerHTML = mDefs.map(d => {
+    const v = snap[d.key];
+    const disp = v !== null && v !== undefined ? parseFloat(v).toFixed(3) : '—';
+    const cls = typeof v === 'number'
+      ? (d.good && d.good(v) ? 'good' : (d.warn && d.warn(v) ? 'warn' : 'ok'))
+      : '';
+    return `<div class="bm-item"><div class="bm-name">${d.label}</div><div class="bm-val ${cls}">${disp}</div></div>`;
+  }).join('');
+}
+
+/* ── UI helpers ───────────────────────────────────────────── */
+function setChip(cls, text) {
+  const chip = document.getElementById('run-chip');
+  chip.className = `run-chip visible ${cls}`;
+  document.getElementById('run-chip-text').textContent = text;
+}
+
+function updateElapsed() {
+  if (!S.startTime || S.status !== 'running') return;
+  const ms = Date.now() - S.startTime;
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  const disp = h > 0 ? `${h}h ${m%60}m ${s%60}s` : m > 0 ? `${m}m ${s%60}s` : `${s}s`;
+  const el = document.getElementById('header-elapsed');
+  if (el) el.textContent = disp;
+}
+
+function resetUI() {
+  S.currentPhase = 0;
+  S.currentIter = 0;
+  S.iterations = {};
+  S.agentResults = {};
+  S.history = [];
+  S.skillLog = null;
+  S.hasFirstLog = false;
+  S.phaseGroups = {};
+
+  // Reset phase bar
+  for (let i = 1; i <= 6; i++) {
+    const el = document.getElementById(`phase-${i}`);
+    if (el) { el.className = 'phase-step'; el.querySelector('.phase-circle').textContent = i; }
+  }
+  document.getElementById('phase-4-iter').textContent = '';
+
+  // Reset log
+  document.getElementById('log-wrap').innerHTML =
+    '<div class="log-empty">Pipeline starting…</div>';
+
+  // Reset skill stream pane (Skills Mode)
+  const _ssBox = document.getElementById('skill-stream-box');
+  const _ssPane = document.getElementById('skill-stream-pane');
+  if (_ssPane) _ssPane.innerHTML = '';
+  if (_ssBox) _ssBox.style.display = 'none';
+
+  // Reset agent tool-call timeline (Skills Mode v2)
+  const _tcPane = document.getElementById('agent-toolcall-pane');
+  const _tcList = document.getElementById('agent-toolcall-list');
+  if (_tcList) _tcList.innerHTML = '';
+  if (_tcPane) _tcPane.classList.add('hidden');
+
+  // Reset iterations
+  document.getElementById('iter-grid').innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">📊</div>
+      <div class="empty-text">No iterations yet</div>
+      <div class="empty-sub">Starting pipeline…</div>
+    </div>`;
+  document.getElementById('tab-iter-badge').textContent = '0';
+  document.getElementById('sum-total').textContent = '—';
+  document.getElementById('sum-best').textContent = '—';
+  document.getElementById('sum-best-iter').textContent = '';
+  document.getElementById('sum-latest').textContent = '—';
+
+  // Reset agents
+  document.getElementById('agents-empty').classList.remove('hidden');
+  document.getElementById('agents-list').innerHTML = '';
+  document.getElementById('agents-list').classList.add('hidden');
+
+  // Reset results
+  document.getElementById('results-empty').classList.remove('hidden');
+  document.getElementById('results-content').classList.add('hidden');
+  document.getElementById('results-meta').innerHTML = '';
+  document.getElementById('results-plots').innerHTML = '';
+  document.getElementById('skill-log-host').innerHTML = '';
+  document.getElementById('best-metrics').innerHTML = '';
+  _shownPlots.clear();
+
+  // Reset chart
+  if (S.scoreChart) {
+    S.scoreChart.data.labels = [];
+    S.scoreChart.data.datasets.forEach(d => d.data = []);
+    S.scoreChart.update();
+  }
+
+  document.getElementById('sum-target').textContent = S.target.toFixed(1);
+  document.getElementById('sum-max').textContent = `of ${S.maxIter} max`;
+
+  switchTab('log');
+}
+
+/* ── JSON syntax highlight ────────────────────────────────── */
+function syntaxHighlight(obj) {
+  const json = JSON.stringify(obj, null, 2);
+  return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, match => {
+    let cls = 'j-num';
+    if (/^"/.test(match)) cls = /:$/.test(match) ? 'j-key' : 'j-str';
+    else if (/true|false/.test(match)) cls = 'j-bool';
+    else if (/null/.test(match)) cls = 'j-null';
+    return `<span class="${cls}">${escHtml(match)}</span>`;
+  });
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+
+<!-- Lightbox overlay (outside all panels so it works from any tab) -->
+<div id="lightbox" onclick="closeLightbox(event)">
+  <div id="lightbox-inner">
+    <div id="lightbox-bar">
+      <span id="lightbox-label"></span>
+      <button id="lightbox-close" onclick="closeLightbox()" title="Close (Esc)">✕</button>
+    </div>
+    <img id="lightbox-img" src="" alt="" />
+  </div>
+</div>
+
+</body>
+</html>
