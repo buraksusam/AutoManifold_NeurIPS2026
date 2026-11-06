@@ -1,0 +1,1129 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AutoManifold</title>
+<meta name="description" content="AutoManifold (NeurIPS 2026): LLM agents that design new manifold-embedding algorithms for data visualisation, steered toward the structure you want your plot to preserve.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="AutoManifold: Agentic Design of Data Visualisation Algorithms via Manifold Embedding">
+<meta property="og:description" content="Tell it what your plot should preserve. LLM agents design, implement and tune a new embedding algorithm that does it. NeurIPS 2026.">
+<meta property="og:image" content="https://buraksusam.github.io/AutoManifold_NeurIPS2026/assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#F3F5F8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1220" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='9' cy='10' r='4' fill='%230F8B8D'/%3E%3Ccircle cx='22' cy='9' r='3' fill='%23E4572E'/%3E%3Ccircle cx='16' cy='22' r='5' fill='%234C6EF5'/%3E%3Ccircle cx='26' cy='21' r='2.5' fill='%23F2A541'/%3E%3C/svg%3E">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Literata:ital,opsz,wght@0,7..72,400..650;1,7..72,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+
+<style>
+:root {
+  --paper: #F3F5F8;
+  --surface: #FFFFFF;
+  --ink: #151A30;
+  --muted: #596075;
+  --rule: #D6DAE3;
+  --accent: #0A6F6A;
+  --accent-soft: #DDEFEC;
+  --designed: #6D3FD6;
+  --designed-soft: #ECE6FB;
+  --plate: #FFFFFF;
+  --win: #0A6F6A;
+  --miss: #C9CEDA;
+
+  --display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --text: "Literata", Georgia, "Times New Roman", serif;
+
+  --measure: 66ch;
+  --wrap: 1180px;
+  --gutter: clamp(16px, 4vw, 40px);
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0E1220;
+    --surface: #161B2C;
+    --ink: #E8EBF3;
+    --muted: #9AA2B8;
+    --rule: #2A3147;
+    --accent: #45C4B8;
+    --accent-soft: #143633;
+    --designed: #B69CFF;
+    --designed-soft: #2A2348;
+    --plate: #F6F7FA;
+    --win: #45C4B8;
+    --miss: #343C55;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--text);
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+img { max-width: 100%; height: auto; display: block; }
+a { color: var(--accent); text-underline-offset: 0.18em; text-decoration-thickness: 1px; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+.wrap { max-width: var(--wrap); margin: 0 auto; padding: 0 var(--gutter); }
+.skip { position: absolute; left: -999px; }
+.skip:focus { left: 12px; top: 12px; background: var(--surface); padding: 8px 12px; z-index: 10; }
+
+h1, h2, h3, .ui { font-family: var(--display); }
+h2 {
+  font-size: clamp(1.75rem, 1.2rem + 2.2vw, 2.75rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+  font-variation-settings: "opsz" 96;
+  margin: 0 0 0.6em;
+  max-width: 22ch;
+}
+h3 { font-size: 1.2rem; line-height: 1.25; font-weight: 650; margin: 0 0 0.4em; letter-spacing: -0.005em; }
+p { margin: 0 0 1em; max-width: var(--measure); }
+.lede { font-size: 1.2rem; line-height: 1.55; color: var(--ink); }
+.muted { color: var(--muted); }
+.small { font-size: 0.9rem; line-height: 1.5; }
+
+section { padding: clamp(64px, 9vw, 120px) 0; }
+section + section { border-top: 1px solid var(--rule); }
+
+/* ---------- top bar ---------- */
+.bar {
+  position: sticky; top: 0; z-index: 5;
+  background: color-mix(in srgb, var(--paper) 86%, transparent);
+  backdrop-filter: saturate(1.4) blur(10px);
+  -webkit-backdrop-filter: saturate(1.4) blur(10px);
+  border-bottom: 1px solid transparent;
+  transition: border-color .2s;
+}
+.bar.scrolled { border-bottom-color: var(--rule); }
+.bar .wrap { display: flex; align-items: center; justify-content: space-between; height: 56px; gap: 16px; }
+.brand { font-family: var(--display); font-weight: 750; font-size: 1.05rem; letter-spacing: -0.01em; color: var(--ink); text-decoration: none; display: flex; align-items: center; gap: 8px; }
+.brand svg { width: 20px; height: 20px; }
+.bar nav { display: flex; gap: clamp(12px, 2.4vw, 28px); font-family: var(--display); font-size: 0.95rem; }
+.bar nav a { color: var(--muted); text-decoration: none; }
+.bar nav a:hover { color: var(--ink); }
+@media (max-width: 640px) { .bar nav a.opt { display: none; } }
+
+/* ---------- hero ---------- */
+.hero { padding: clamp(28px, 5vw, 64px) 0 clamp(48px, 7vw, 96px); }
+.hero .wrap {
+  display: grid; grid-template-columns: minmax(0, 11fr) minmax(0, 13fr);
+  grid-template-areas: "intro stage" "rest stage";
+  column-gap: clamp(24px, 4vw, 56px);
+}
+.hero .intro { grid-area: intro; align-self: end; }
+.hero .rest { grid-area: rest; align-self: start; }
+.hero .stage { grid-area: stage; align-self: center; }
+.wordmark {
+  font-family: var(--display);
+  font-size: clamp(2.9rem, 1.2rem + 4.4vw, 5.1rem);
+  line-height: 0.92;
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  font-variation-settings: "opsz" 96;
+  margin: 0 0 0.28em;
+}
+.paper-title {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: clamp(1.1rem, 0.95rem + 0.6vw, 1.35rem);
+  line-height: 1.3;
+  color: var(--muted);
+  margin: 0 0 1.4em;
+  max-width: 30ch;
+}
+.hero .lede { margin-bottom: 1.4em; max-width: 40ch; }
+@media (max-width: 560px) { .lede { font-size: 1.1rem; } }
+.authors { font-family: var(--display); font-size: 1rem; line-height: 1.5; margin: 0 0 1.6em; }
+.authors strong { font-weight: 600; }
+.authors sup { font-size: 0.68em; line-height: 0; margin-left: 1px; color: var(--muted); }
+.authors span { display: block; color: var(--muted); }
+.authors .venue { display: inline-block; margin-top: 6px; padding: 2px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: 0.9rem; }
+
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.btn {
+  font-family: var(--display); font-weight: 600; font-size: 0.98rem;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 18px; border-radius: 10px;
+  border: 1px solid var(--rule); background: var(--surface); color: var(--ink);
+  text-decoration: none; cursor: pointer;
+}
+.btn:hover { border-color: var(--ink); }
+.btn.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.btn.primary:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn svg { width: 18px; height: 18px; flex: none; }
+.btn[aria-disabled="true"] { opacity: .55; cursor: default; }
+.btn[aria-disabled="true"]:hover { border-color: var(--rule); }
+
+/* point cloud stage */
+.stage { position: relative; }
+.cloud-frame {
+  position: relative;
+  aspect-ratio: 7 / 5.2;
+  border-radius: 18px;
+  background:
+    radial-gradient(ellipse at 50% 45%, color-mix(in srgb, var(--surface) 92%, transparent), transparent 70%),
+    var(--surface);
+  border: 1px solid var(--rule);
+  overflow: hidden;
+}
+#cloud { position: absolute; inset: 0; width: 100%; height: 100%; }
+.cloud-note { position: absolute; left: 14px; bottom: 10px; font-family: var(--display); font-size: 0.78rem; color: var(--muted); pointer-events: none; }
+.priorities { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 10px; }
+.priorities button {
+  font-family: var(--display); font-size: 0.92rem; font-weight: 550;
+  padding: 7px 14px; border-radius: 999px;
+  border: 1px solid var(--rule); background: transparent; color: var(--muted); cursor: pointer;
+}
+.priorities button:hover { color: var(--ink); border-color: var(--muted); }
+.priorities button[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.priorities .ask { font-family: var(--display); font-size: 0.92rem; color: var(--muted); align-self: center; margin-right: 2px; }
+.cloud-caption { font-size: 0.95rem; line-height: 1.5; color: var(--muted); min-height: 3em; margin: 0; max-width: 60ch; }
+.cloud-caption b { color: var(--ink); font-weight: 600; }
+
+@media (max-width: 900px) {
+  .hero .wrap { grid-template-columns: minmax(0, 1fr); grid-template-areas: "intro" "stage" "rest"; }
+  .hero .paper-title { margin-bottom: 1.1em; }
+  .hero .stage { margin-bottom: 28px; }
+  .cloud-frame { aspect-ratio: 4 / 3.3; }
+}
+
+/* ---------- problem ---------- */
+.split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(24px, 5vw, 72px); }
+@media (max-width: 860px) { .split { grid-template-columns: minmax(0, 1fr); } }
+.tradeoffs { list-style: none; padding: 0; margin: 0; display: grid; gap: 0; border-top: 1px solid var(--rule); }
+.tradeoffs li { display: grid; grid-template-columns: 7.5rem 1fr; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--rule); }
+.tradeoffs .m { font-family: var(--display); font-weight: 650; }
+.tradeoffs p { margin: 0; color: var(--muted); font-size: 0.98rem; }
+.tradeoffs li.ours .m { color: var(--accent); }
+.tradeoffs li.ours p { color: var(--ink); }
+@media (max-width: 520px) { .tradeoffs li { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
+
+/* ---------- framework ---------- */
+.legend-inline { display: inline-flex; align-items: center; gap: 6px; font-family: var(--display); font-size: 0.92rem; }
+.legend-inline i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: var(--designed-soft); border: 1.5px solid var(--designed); }
+.components { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 14px; overflow: hidden; margin-top: 36px; }
+.comp { background: var(--surface); padding: clamp(20px, 3vw, 32px); display: flex; flex-direction: column; min-width: 0; }
+.comp p { font-size: 0.98rem; color: var(--muted); }
+.comp .eq { margin-top: auto; overflow-x: auto; overflow-y: hidden; padding: 10px 0 4px; font-size: 0.98rem; color: var(--ink); }
+.comp .eq .katex-display { margin: 0; }
+.katex .agent { color: var(--designed); background: var(--designed-soft); border-radius: 4px; padding: 0 2px; }
+@media (max-width: 860px) { .components { grid-template-columns: minmax(0, 1fr); } }
+
+.vocab { display: flex; flex-wrap: wrap; gap: 28px 48px; margin-top: 36px; }
+.vocab div { font-family: var(--display); }
+.vocab b { display: block; font-size: 2.2rem; font-weight: 750; line-height: 1; letter-spacing: -0.02em; }
+.vocab span { color: var(--muted); font-size: 0.95rem; }
+
+/* ---------- pipeline ---------- */
+.principle { font-family: var(--display); font-size: clamp(1.4rem, 1rem + 1.6vw, 2.1rem); font-weight: 600; letter-spacing: -0.015em; line-height: 1.2; margin: 0 0 0.5em; }
+.flow { margin-top: 40px; display: grid; grid-template-columns: 9rem minmax(0, 1fr) 9rem; gap: 14px; align-items: stretch; }
+.io { border: 1px dashed var(--rule); border-radius: 12px; padding: 14px; font-family: var(--display); font-size: 0.9rem; color: var(--muted); display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+.io strong { color: var(--ink); font-weight: 650; font-size: 0.95rem; margin-bottom: 4px; }
+.phases { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; counter-reset: ph; }
+.phase-tab {
+  width: 100%; height: 100%; text-align: left; cursor: pointer;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--rule); border-radius: 12px; padding: 12px 12px 14px;
+  font-family: var(--display);
+  display: flex; flex-direction: column; gap: 8px;
+  position: relative;
+}
+.phase-tab:hover { border-color: var(--muted); }
+.phase-tab[aria-selected="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.phase-tab .n { font-size: 0.8rem; color: var(--muted); font-weight: 600; }
+.phase-tab[aria-selected="true"] .n { color: var(--accent); }
+.phase-tab .t { font-size: 1rem; font-weight: 650; line-height: 1.2; hyphens: auto; -webkit-hyphens: auto; overflow-wrap: break-word; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip { font-family: var(--display); font-size: 0.74rem; font-weight: 600; padding: 2px 7px; border-radius: 6px; background: var(--paper); border: 1px solid var(--rule); color: var(--ink); white-space: nowrap; }
+.chip.core { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.chip.eng { background: transparent; border-style: dashed; color: var(--muted); }
+.phase-panel { margin-top: 14px; background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; padding: clamp(20px, 3vw, 32px); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 40px; }
+.phase-panel[hidden] { display: none; }
+.phase-panel h3 { grid-column: 1 / -1; }
+.phase-panel dl { margin: 0; }
+.phase-panel dt { font-family: var(--display); font-weight: 650; margin-top: 10px; }
+.phase-panel dt:first-child { margin-top: 0; }
+.phase-panel dd { margin: 2px 0 0; color: var(--muted); font-size: 0.98rem; }
+.phase-panel .agent-name { color: var(--ink); }
+.engines { display: flex; flex-wrap: wrap; gap: 10px 26px; margin-top: 18px; font-family: var(--display); font-size: 0.92rem; color: var(--muted); }
+.engines b { color: var(--ink); font-weight: 600; }
+@media (max-width: 1020px) {
+  .flow { grid-template-columns: minmax(0, 1fr); }
+  .io { flex-direction: row; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; }
+  .io strong { margin: 0; }
+  .phases { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .phases { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .phase-panel { grid-template-columns: minmax(0, 1fr); }
+}
+.no-js .phase-panel[hidden] { display: grid; }
+
+/* ---------- figures ---------- */
+figure { margin: 0; }
+.plate { background: var(--plate); border-radius: 14px; border: 1px solid var(--rule); padding: clamp(10px, 2vw, 22px); }
+figcaption { font-size: 0.95rem; line-height: 1.5; color: var(--muted); margin-top: 12px; max-width: 80ch; }
+figcaption b { color: var(--ink); font-weight: 600; }
+.fig-stack { display: grid; gap: 44px; margin-top: 40px; }
+.callouts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin-top: 16px; border-top: 1px solid var(--rule); }
+.callouts div { padding: 10px 12px 0 0; font-family: var(--display); font-size: 0.9rem; color: var(--muted); }
+.callouts b { display: block; font-size: 1.25rem; color: var(--ink); font-weight: 700; letter-spacing: -0.01em; }
+.callouts div:first-child b { color: var(--accent); }
+@media (max-width: 640px) { .callouts { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 10px; } }
+
+/* ---------- scoreboard ---------- */
+.scoreboard { margin-top: 36px; display: grid; grid-template-columns: auto repeat(6, minmax(0, 1fr)) auto; gap: 0; font-family: var(--display); font-size: 0.92rem; border-top: 1px solid var(--rule); }
+.scoreboard > * { padding: 10px 8px; border-bottom: 1px solid var(--rule); display: flex; align-items: center; }
+.scoreboard .hd { color: var(--muted); font-size: 0.82rem; justify-content: center; }
+.scoreboard .hd.l { justify-content: flex-start; }
+.scoreboard .row-name { font-weight: 650; gap: 8px; white-space: nowrap; padding-left: 0; }
+.scoreboard .row-name small { font-weight: 450; color: var(--muted); font-size: 0.82rem; }
+.scoreboard .dot { justify-content: center; }
+.scoreboard .dot i { width: 14px; height: 14px; border-radius: 50%; background: var(--miss); display: block; }
+.scoreboard .dot i.win { background: var(--win); }
+.scoreboard .tally { font-weight: 700; justify-content: flex-end; padding-right: 0; }
+@media (max-width: 640px) {
+  .scoreboard { font-size: 0.85rem; }
+  .scoreboard .row-name small { display: none; }
+  .scoreboard > * { padding: 9px 3px; }
+  .scoreboard .hd { font-size: 0.72rem; }
+}
+
+/* ---------- tables ---------- */
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 28px 0 14px; }
+.tabs button { font-family: var(--display); font-size: 0.92rem; font-weight: 550; padding: 6px 13px; border-radius: 8px; border: 1px solid var(--rule); background: transparent; color: var(--muted); cursor: pointer; }
+.tabs button:hover { color: var(--ink); }
+.tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); border-color: var(--ink); }
+.tabs .diff { font-size: 0.75rem; color: var(--muted); margin-left: 4px; font-weight: 450; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 12px; background: var(--surface); -webkit-overflow-scrolling: touch; }
+table { border-collapse: collapse; width: 100%; font-family: var(--display); font-size: 0.9rem; }
+th, td { padding: 9px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--rule); }
+tbody tr:last-child th, tbody tr:last-child td { border-bottom: 0; }
+thead th { font-weight: 600; color: var(--muted); font-size: 0.82rem; vertical-align: bottom; }
+thead th:first-child { text-align: left; }
+thead tr.group th { text-align: left; color: var(--ink); font-size: 0.82rem; padding-bottom: 2px; border-bottom: 0; }
+thead tr.group th.ours { color: var(--accent); }
+tbody th { text-align: left; font-weight: 600; position: sticky; left: 0; background: var(--surface); }
+tbody th small { color: var(--muted); font-weight: 450; margin-left: 4px; }
+td.sep, th.sep { border-left: 1px solid var(--rule); }
+td.best { font-weight: 750; }
+td.beats { text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; text-decoration-thickness: 2px; }
+td.target { background: var(--accent-soft); }
+td.dim { color: var(--muted); }
+.table-key { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 12px; font-family: var(--display); font-size: 0.86rem; color: var(--muted); }
+.table-key span b { color: var(--ink); }
+.table-key .k-target { display: inline-block; width: 14px; height: 12px; background: var(--accent-soft); border-radius: 3px; vertical-align: -1px; margin-right: 4px; }
+.table-key u { text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; color: var(--ink); }
+
+.ablation { margin-top: 28px; }
+.ablation td.win { font-weight: 750; color: var(--ink); }
+.ablation th.blk { text-align: center; color: var(--ink); }
+
+/* ---------- inside a run ---------- */
+.two-figs { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: 28px; margin-top: 40px; align-items: start; }
+@media (max-width: 860px) { .two-figs { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- modes ---------- */
+.modes { margin: 36px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--rule); }
+.modes li { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); gap: 8px 32px; padding: 18px 0; border-bottom: 1px solid var(--rule); }
+.modes .name { font-family: var(--display); font-weight: 700; font-size: 1.1rem; }
+.modes .name code { display: block; font-weight: 450; color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
+.modes p { margin: 0; color: var(--muted); }
+.modes li.main .name { color: var(--accent); }
+@media (max-width: 640px) { .modes li { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- code ---------- */
+.code { position: relative; background: #151A30; color: #E6E9F2; border-radius: 14px; padding: 50px 22px 20px; margin-top: 24px; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.9rem; line-height: 1.7; overflow-x: auto; }
+@media (prefers-color-scheme: dark) { .code { background: #070A14; border: 1px solid var(--rule); } }
+.code pre { margin: 0; white-space: pre; }
+.code .c { color: #8F98B3; }
+.copy {
+  position: absolute; top: 12px; right: 12px;
+  font-family: var(--display); font-size: 0.82rem; font-weight: 600;
+  background: rgba(255,255,255,.08); color: #E6E9F2; border: 1px solid rgba(255,255,255,.18);
+  border-radius: 8px; padding: 5px 10px; cursor: pointer;
+}
+.copy:hover { background: rgba(255,255,255,.16); }
+.quick { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(24px, 5vw, 64px); align-items: start; }
+@media (max-width: 860px) { .quick { grid-template-columns: minmax(0, 1fr); } }
+
+footer { border-top: 1px solid var(--rule); padding: 36px 0 48px; font-family: var(--display); font-size: 0.9rem; color: var(--muted); }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 32px; justify-content: space-between; }
+footer a { color: var(--muted); }
+</style>
+</head>
+<body class="no-js">
+<script>document.body.classList.remove('no-js');</script>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="bar" id="bar">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="AutoManifold, back to top">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="9" cy="10" r="4" fill="#0F8B8D"/><circle cx="22" cy="9" r="3" fill="#E4572E"/><circle cx="16" cy="22" r="5" fill="#4C6EF5"/><circle cx="26" cy="21" r="2.5" fill="#F2A541"/></svg>
+      AutoManifold
+    </a>
+    <nav aria-label="Sections">
+      <a class="opt" href="#method">Method</a>
+      <a class="opt" href="#pipeline">Pipeline</a>
+      <a href="#results">Results</a>
+      <a href="#start">Code</a>
+      <a href="#cite">Cite</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+<!-- ================= HERO ================= -->
+<div class="hero" id="top">
+  <div class="wrap">
+    <div class="intro">
+      <h1 class="wordmark">AutoManifold</h1>
+      <p class="paper-title">Agentic Design of Data Visualisation Algorithms via Manifold Embedding</p>
+    </div>
+    <div class="rest">
+      <p class="lede">Say what your plot should preserve: tight clusters, global distances or local neighbourhoods. A team of LLM agents then designs, implements and tunes a new embedding algorithm for your data that does it.</p>
+      <p class="authors">
+        <strong>Burak Susam</strong><sup>1</sup>, <strong>Ruiyuan Kang</strong><sup>2</sup> and <strong>Tingting Mu</strong><sup>1</sup>
+        <span><sup>1</sup>Department of Computer Science, University of Manchester</span>
+        <span><sup>2</sup>X32 Studio, Abu Dhabi</span>
+        <span class="venue">NeurIPS 2026</span>
+      </p>
+      <div class="actions">
+        <!-- TODO: replace href with the paper link (arXiv / OpenReview) and remove aria-disabled -->
+        <a class="btn primary" id="paper-link" href="#" aria-disabled="true" title="Link coming soon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg>
+          Paper (soon)
+        </a>
+        <a class="btn" href="https://github.com/buraksusam/AutoManifold_NeurIPS2026">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>
+          Code
+        </a>
+        <a class="btn" href="#cite">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 7h4v4c0 3-1.5 5-4 6M15 7h4v4c0 3-1.5 5-4 6"/></svg>
+          BibTeX
+        </a>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="cloud-frame">
+        <canvas id="cloud" role="img" aria-label="Animated point cloud: a curled sheet of coloured clusters in 3-D that unfolds into a 2-D layout. The layout changes with the selected priority."></canvas>
+        <span class="cloud-note">Schematic illustration. Real results below.</span>
+      </div>
+      <div class="priorities" role="group" aria-label="Choose what the layout should preserve">
+        <span class="ask">Preserve:</span>
+        <button type="button" data-mode="raw">Raw data (3-D)</button>
+        <button type="button" data-mode="balanced">Balanced</button>
+        <button type="button" data-mode="local">Local structure</button>
+        <button type="button" data-mode="global">Global distances</button>
+        <button type="button" data-mode="clusters">Cluster separation</button>
+      </div>
+      <p class="cloud-caption" id="cloud-caption" aria-live="polite"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ================= PROBLEM ================= -->
+<section id="problem">
+  <div class="wrap split">
+    <div>
+      <h2>Every embedding method ships with a fixed trade-off</h2>
+    </div>
+    <div>
+      <p class="lede">t-SNE, UMAP and PaCMAP dominate data visualisation. Each one decides at design time how much to favour local neighbourhoods over global layout and cluster separation. Hyperparameters only move you a little within that choice.</p>
+      <p>Designing a new algorithm for a different priority takes specialist knowledge and a lot of trial and error. And asking an LLM to just write one is unreliable: generated code tends to have numerical bugs, miscalibrated objectives and silent failures, and it drifts toward whatever the model saw in training rather than what you asked for.</p>
+      <ul class="tradeoffs">
+        <li><span class="m">t-SNE</span><p>Matches neighbour similarity distributions. Strong local detail; distances between clusters carry little meaning.</p></li>
+        <li><span class="m">UMAP</span><p>Aligns fuzzy topological graphs. Faster and somewhat more global, still built for local fidelity.</p></li>
+        <li><span class="m">PaCMAP</span><p>Adds mid-near and far pairs to balance local and global structure, with one fixed balance.</p></li>
+        <li class="ours"><span class="m">AutoManifold</span><p>Builds a new algorithm per dataset and per priority, from parts whose behaviour is known.</p></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================= METHOD ================= -->
+<section id="method">
+  <div class="wrap">
+    <h2>A unified framework the agents fill in</h2>
+    <p class="lede">The paper breaks embedding design into the components that govern quality and writes each one as a template. Engines implement the fixed parts. Agents design the parts marked below, conditioned on the data and on your priority.</p>
+    <p><span class="legend-inline"><i></i> Designed by agents</span> &nbsp; <span class="legend-inline muted">Everything else is fixed, deterministic code</span></p>
+
+    <div class="components">
+      <div class="comp">
+        <h3>Embedding difficulty</h3>
+        <p>Cluster the data into patches, embed each with t-SNE and UMAP, score them, and label every point hard, moderate or easy. Later components adapt to this label.</p>
+        <div class="eq">$$\mathrm{diff}(\mathbf{x}_i)=\htmlClass{agent}{\mathrm{assign}}\!\left(\sum_{l=1}^{L}\mathrm{score}_l\big(\{\mathbf{x}_j,\mathbf{z}_j\}_{\mathrm{clustID}(\mathbf{x}_j)=\mathrm{clustID}(\mathbf{x}_i)}\big)\right)$$</div>
+      </div>
+      <div class="comp">
+        <h3>Adaptive affinity ensemble</h3>
+        <p>Several neighbourhood graphs (distance measure × neighbourhood rule) are mixed with weights that can change from point to point, depending on local geometry, difficulty and global data traits.</p>
+        <div class="eq">$$a_{ij}=\sum_{l=1}^{Q}\htmlClass{agent}{w_l}\big(\mathbf{x}_i,\htmlClass{agent}{f^{(A)}}(\mathbf{x}_i),\mathrm{diff}(\mathbf{x}_i),\htmlClass{agent}{g}(\mathbf{X})\big)\,a_l\big(\mathbf{x}_i,\mathbf{x}_j;\theta^{(A)}_l\big)$$</div>
+      </div>
+      <div class="comp">
+        <h3>Constrained multi-objective cost</h3>
+        <p>A primary local objective is minimised while global objectives are held under thresholds, or everything is combined as a weighted sum or a Pareto problem. The agents choose the form and the weights.</p>
+        <div class="eq">$$\min_{\{\mathbf{z}_i\}}\sum_{l\in\mathcal{I}_p}\sum_{i=1}^{n}\htmlClass{agent}{\lambda_l}(\cdot)\,\htmlClass{agent}{O_l}(\mathbf{x}_i,\mathbf{z}_i,\mathrm{Opt}_{C_l})\quad\text{s.t.}\ \sum_{i=1}^{n}O_l\le\theta_l,\ l\in\mathcal{I}_c$$</div>
+      </div>
+      <div class="comp">
+        <h3>Configuration and refinement</h3>
+        <p>An initial configuration is guessed from data characteristics, then hyperparameters are refined in a loop that reads the reliability scores of each embedding.</p>
+        <div class="eq">$$\theta^{(t+1)}=\htmlClass{agent}{F_{\mathrm{update}}}\Big(\theta^{(t)},\big\{\mathrm{score}_l(\{(\mathbf{x}_i,\mathbf{z}_i)\})\big\}_{l=1}^{L}\Big)$$</div>
+      </div>
+    </div>
+
+    <div class="vocab" aria-label="Primitive vocabulary">
+      <div><b>6</b><span>affinity primitives</span></div>
+      <div><b>5</b><span>objective primitives</span></div>
+      <div><b>4</b><span>optimisation solvers</span></div>
+      <div><b>6</b><span>reliability scores</span></div>
+    </div>
+    <p class="muted small" style="margin-top:16px">Agents may combine primitives freely but cannot invent new numerical kernels. The paper calls the result <em>compositional novelty</em>: new algorithms built from new combinations of known, numerically safe parts.</p>
+  </div>
+</section>
+
+<!-- ================= PIPELINE ================= -->
+<section id="pipeline">
+  <div class="wrap">
+    <h2>Twelve agents, six phases, one planner</h2>
+    <p class="principle">Agents propose. Engines measure.</p>
+    <p class="lede">Every LLM output is checked by deterministic code before it counts. A planner runs the workflow, worker agents each own one narrow task with a fixed JSON output, and compute engines produce the embeddings and scores. Select a phase to see who does what.</p>
+
+    <div class="flow">
+      <div class="io"><strong>Input</strong><span>High-dimensional data</span><span>Your priority</span></div>
+      <div>
+        <ol class="phases" role="tablist" aria-label="Pipeline phases">
+          <li><button class="phase-tab" role="tab" id="tab-1" aria-controls="ph-1" aria-selected="true"><span class="n">Phase 1</span><span class="t">Baseline analysis</span><span class="chips"><span class="chip eng">DR-V</span><span class="chip eng">QAE</span></span></button></li>
+          <li><button class="phase-tab" role="tab" id="tab-2" aria-controls="ph-2" aria-selected="false" tabindex="-1"><span class="n">Phase 2</span><span class="t">Data characterisation</span><span class="chips"><span class="chip">A1</span></span></button></li>
+          <li><button class="phase-tab" role="tab" id="tab-3" aria-controls="ph-3" aria-selected="false" tabindex="-1"><span class="n">Phase 3</span><span class="t">Structure analysis</span><span class="chips"><span class="chip">A2</span><span class="chip">A3</span></span></button></li>
+          <li><button class="phase-tab" role="tab" id="tab-4" aria-controls="ph-4" aria-selected="false" tabindex="-1"><span class="n">Phase 4</span><span class="t">Algorithm design</span><span class="chips"><span class="chip">A4</span><span class="chip">A5</span></span></button></li>
+          <li><button class="phase-tab" role="tab" id="tab-5" aria-controls="ph-5" aria-selected="false" tabindex="-1"><span class="n">Phase 5</span><span class="t">Synthesis</span><span class="chips"><span class="chip">A8</span><span class="chip">A10</span><span class="chip">A12</span></span></button></li>
+          <li><button class="phase-tab" role="tab" id="tab-6" aria-controls="ph-6" aria-selected="false" tabindex="-1"><span class="n">Phase 6</span><span class="t">Refinement and output</span><span class="chips"><span class="chip core">A6</span><span class="chip">A7</span><span class="chip">A9</span><span class="chip">A11</span></span></button></li>
+        </ol>
+      </div>
+      <div class="io"><strong>Output</strong><span>Algorithm code</span><span>Pseudocode and maths</span><span>Metrics vs baselines</span></div>
+    </div>
+
+    <div class="phase-panel" role="tabpanel" id="ph-1" aria-labelledby="tab-1">
+      <h3>Baseline analysis</h3>
+      <dl>
+        <dt>Engines</dt>
+        <dd>The DR-Visualisation engine runs t-SNE, UMAP and PaCMAP; the Quantitative Analyst engine scores them on all six reliability metrics.</dd>
+      </dl>
+      <dl>
+        <dt>Hands on</dt>
+        <dd>The best baseline and the metric targets for the refinement loop. The synthesiser later sees these so it knows what it has to beat.</dd>
+      </dl>
+    </div>
+    <div class="phase-panel" role="tabpanel" id="ph-2" aria-labelledby="tab-2" hidden>
+      <h3>Data characterisation</h3>
+      <dl>
+        <dt class="agent-name">Agent 1, data characterisation</dt>
+        <dd>Designs the data-characteristic function <i>g</i> (geometry, density, cluster imbalance) and uses it to pick an initial configuration.</dd>
+      </dl>
+      <dl>
+        <dt>Also decides</dt>
+        <dd>Pre-processing, for example a PCA step to an intermediate dimension before embedding.</dd>
+      </dl>
+    </div>
+    <div class="phase-panel" role="tabpanel" id="ph-3" aria-labelledby="tab-3" hidden>
+      <h3>Structure analysis</h3>
+      <dl>
+        <dt class="agent-name">Agent 2, embedding difficulty</dt>
+        <dd>Designs the difficulty function that labels each point hard, moderate or easy to embed.</dd>
+      </dl>
+      <dl>
+        <dt class="agent-name">Agent 3, neighbourhood analysis</dt>
+        <dd>Estimates how large a neighbourhood can be embedded almost isometrically, which informs neighbourhood sizes downstream.</dd>
+      </dl>
+    </div>
+    <div class="phase-panel" role="tabpanel" id="ph-4" aria-labelledby="tab-4" hidden>
+      <h3>Algorithm design</h3>
+      <dl>
+        <dt class="agent-name">Agent 4, affinity graph designer</dt>
+        <dd>Chooses which affinity primitives to combine and how to weight them, either as constants or as adaptive per-point functions.</dd>
+      </dl>
+      <dl>
+        <dt class="agent-name">Agent 5, cost function composer</dt>
+        <dd>Picks the objectives, which are primary and which are constraints, and their weights. The planner then selects a solver for the composed problem.</dd>
+      </dl>
+    </div>
+    <div class="phase-panel" role="tabpanel" id="ph-5" aria-labelledby="tab-5" hidden>
+      <h3>Algorithm synthesis</h3>
+      <dl>
+        <dt class="agent-name">Agent 8, synthesiser</dt>
+        <dd>Writes the executable algorithm from the design, reusing verified code for the fixed parts.</dd>
+        <dt class="agent-name">Agent 10, error recovery</dt>
+        <dd>Repairs code that fails to run, in a separate loop.</dd>
+      </dl>
+      <dl>
+        <dt class="agent-name">Agent 12, novelty validator</dt>
+        <dd>Compares the result with the maths of t-SNE, UMAP, PaCMAP, LargeVis, Spectral Embedding and ForceAtlas2, names the closest method and explains what is different.</dd>
+      </dl>
+    </div>
+    <div class="phase-panel" role="tabpanel" id="ph-6" aria-labelledby="tab-6" hidden>
+      <h3>Refinement, analysis and output</h3>
+      <dl>
+        <dt class="agent-name">Agent 6, hyperparameter optimisation</dt>
+        <dd>Iteratively refines the new algorithm's hyperparameters from its reliability scores.</dd>
+        <dt class="agent-name">Agent 7, visualisation evaluator</dt>
+        <dd>Grades each iteration against the metrics you prioritised.</dd>
+      </dl>
+      <dl>
+        <dt class="agent-name">Agent 11, maths and pseudocode</dt>
+        <dd>Writes the formal formulation and step-by-step pseudocode of the final algorithm.</dd>
+        <dt class="agent-name">Agent 9, visual forensics</dt>
+        <dd>Inspects the final plot, marking distorted, well-preserved and hierarchy-breaking regions.</dd>
+      </dl>
+    </div>
+
+    <div class="engines">
+      <span><b>DR-V</b> DR-visualisation engine</span>
+      <span><b>QAE</b> quantitative analyst engine</span>
+      <span><b>CE</b> clustering engine</span>
+      <span><b>A6</b> is the optimisation core of the loop</span>
+    </div>
+  </div>
+</section>
+
+<!-- ================= RESULTS ================= -->
+<section id="results">
+  <div class="wrap">
+    <h2>Ask for cluster separation, get cluster separation</h2>
+    <p class="lede">On cortex development data, the three baselines score above 0.9 on local fidelity yet squash cell types into overlapping ribbons. Asked to prioritise silhouette, AutoManifold designed a new affinity graph and objective that pull cells of the same type into compact, clearly separate groups.</p>
+
+    <div class="fig-stack">
+      <figure>
+        <div class="plate"><img src="assets/cortex-autosil.webp" width="2400" height="538" loading="lazy" alt="Four scatter plots of the cortex dataset. Auto-Sil shows many compact, well-separated coloured clusters. t-SNE, UMAP and PaCMAP show overlapping ribbons and mixed colours."></div>
+        <figcaption><b>Cortex development, Auto-Sil against t-SNE, UMAP and PaCMAP.</b> Silhouette rises from about −0.02 for every baseline to 0.57, while trustworthiness stays above 0.80.</figcaption>
+        <div class="callouts">
+          <div><b>0.572</b>Auto-Sil silhouette</div>
+          <div><b>−0.015</b>t-SNE</div>
+          <div><b>−0.023</b>UMAP</div>
+          <div><b>−0.020</b>PaCMAP</div>
+        </div>
+      </figure>
+      <figure>
+        <div class="plate"><img src="assets/pbmc3k-autol.webp" width="2400" height="592" loading="lazy" alt="Four scatter plots of PBMC3k. Auto-L shows clear clusters with visible sub-cluster structure; the baselines show the same cell types with less internal detail."></div>
+        <figcaption><b>PBMC3k, Auto-L against the baselines.</b> Asked to reduce outliers, the agents produced an algorithm that also raised local fidelity (trustworthiness 0.882, best of all methods) and shows sub-cluster structure more clearly.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section id="steering">
+  <div class="wrap">
+    <h2>Steering works best on global structure</h2>
+    <p class="lede">For each of the six reliability scores, AutoManifold designed a separate algorithm targeting it. A filled dot means the generated algorithm beat the best of tuned t-SNE, UMAP and PaCMAP on its own target.</p>
+    <div class="scoreboard" id="scoreboard" role="table" aria-label="Wins against the best tuned baseline on the targeted metric, per dataset"></div>
+    <p class="muted small" style="margin-top:14px">Spearman correlation and silhouette are won on all six datasets, stress on five. Local metrics are harder to beat because the primitives can already reproduce strong baselines there, a limitation the paper discusses openly.</p>
+
+    <h3 style="margin-top:56px">Full results by dataset</h3>
+    <div class="tabs" role="tablist" aria-label="Dataset" id="ds-tabs"></div>
+    <div class="table-wrap"><table id="t1" aria-describedby="t1-key"></table></div>
+    <div class="table-key" id="t1-key">
+      <span><b>Bold</b> best of all 12 methods</span>
+      <span><u>Underlined</u> generated algorithm beats the best baseline</span>
+      <span><i class="k-target"></i>score the variant was asked to improve</span>
+      <span>↑ higher is better, ↓ lower is better</span>
+    </div>
+    <noscript><p>Enable JavaScript to view the interactive results table, or see Table 1 in the paper.</p></noscript>
+
+    <h3 style="margin-top:64px">More than hyperparameter tuning</h3>
+    <p>On PBMC3k, every approach was asked to optimise one global score at a time: a 50-trial random search over t-SNE, a single LLM prompt (SingleLLM), a skeleton-free multi-agent system (NoSkel-Agents) and AutoManifold. Tuning t-SNE barely moves the global scores, and the two less structured LLM setups are less reliable on the scores they were not targeting.</p>
+    <div class="table-wrap ablation"><table id="t2"></table></div>
+    <p class="muted small" style="margin-top:12px">Bold marks the best value in each priority block. Values from Table 2 of the paper.</p>
+  </div>
+</section>
+
+<section id="run">
+  <div class="wrap">
+    <h2>What one run looks like</h2>
+    <p class="lede">The refinement loop logs agent grades and all reliability scores per iteration, and the forensics agent annotates the final plot so you can see where it can be trusted.</p>
+    <div class="two-figs">
+      <figure>
+        <div class="plate"><img src="assets/convergence.webp" width="1400" height="1012" loading="lazy" alt="Two line charts over five iterations: evaluator and implicit quality scores rise from about 2 to 8.5; silhouette climbs from −0.2 to about 0.57 while trustworthiness stays near 0.88."></div>
+        <figcaption><b>Auto-Sil on cortex, five refinement iterations.</b> Iteration 4 is selected: it best fits the requested priority, and the agents' grades agree with the measured scores.</figcaption>
+      </figure>
+      <figure>
+        <div class="plate"><img src="assets/forensics.webp" width="2400" height="1068" loading="lazy" alt="Final embedding of cortex cell types beside a distortion heatmap. Dashed circles mark a central high-distortion core and disrupted hierarchies; a solid green circle marks a well-preserved outlier cluster."></div>
+        <figcaption><b>Visual forensics by Agent 9.</b> A distortion heatmap with marked high-distortion regions, broken hierarchies and well-preserved areas.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ================= MODES / CODE ================= -->
+<section id="start">
+  <div class="wrap">
+    <div class="quick">
+      <div>
+        <h2>Run it on your own data</h2>
+        <p class="lede">The repository includes a web UI for every pipeline mode and a command-line tool. Use a built-in dataset or upload a CSV, pick an LLM provider and say what to optimise.</p>
+        <p>Works with OpenAI, Anthropic, Google Gemini and DeepSeek. Python 3.10 or newer. The test suite uses mocked LLM clients, so it runs without API keys.</p>
+        <p><a href="https://github.com/buraksusam/AutoManifold_NeurIPS2026">Open the repository on GitHub</a></p>
+      </div>
+      <div>
+        <div class="code">
+          <button class="copy" type="button" data-copy="quick-code">Copy</button>
+<pre id="quick-code">git clone https://github.com/buraksusam/AutoManifold_NeurIPS2026.git
+cd AutoManifold_NeurIPS2026
+python -m venv .venv &amp;&amp; source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env   <span class="c"># add your LLM API key</span>
+
+python serve.py --open <span class="c"># web UI at http://localhost:8000</span></pre>
+        </div>
+      </div>
+    </div>
+
+    <ul class="modes">
+      <li class="main"><div class="name">AutoManifold<code>automanifold</code></div><p>The full method: specialised agents analyse the data, design affinity and cost from the primitive library, then synthesise, validate and refine a new algorithm.</p></li>
+      <li><div class="name">NoSkel-Agents<code>noskel_agents</code></div><p>Ablation without the framework skeleton. A designer agent starts from a blank canvas and spawns analysis sub-agents on demand.</p></li>
+      <li><div class="name">Auto-Skills<code>auto_skills</code></div><p>One autonomous agent drives the design by calling skills and deterministic compute tools.</p></li>
+      <li><div class="name">SingleLLM<code>singlellm</code></div><p>Baseline: one prompt produces the whole algorithm, with no agents and no data context.</p></li>
+      <li><div class="name">Optimization<code>optimization</code></div><p>Tunes an existing method (t-SNE, UMAP, PaCMAP or PCA) with LLM-guided iterative refinement.</p></li>
+    </ul>
+  </div>
+</section>
+
+<section id="cite">
+  <div class="wrap">
+    <h2>Cite</h2>
+    <div class="code">
+      <button class="copy" type="button" data-copy="bibtex">Copy</button>
+<pre id="bibtex">@inproceedings{automanifold2026,
+  title     = {AutoManifold: Agentic Design of Data Visualisation
+               Algorithms via Manifold Embedding},
+  author    = {Susam, Burak and Kang, Ruiyuan and Mu, Tingting},
+  booktitle = {Advances in Neural Information Processing Systems},
+  year      = {2026}
+}</pre>
+    </div>
+    <p class="muted small" style="margin-top:20px">The hyperparameter refinement loop builds on <em>Explainable Iterative Data Visualisation Refinement via an LLM Agent</em> (Susam and Mu, IEEE CG&amp;A 2026).</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>AutoManifold, NeurIPS 2026. Code released under the MIT licence.</span>
+    <a href="https://github.com/buraksusam/AutoManifold_NeurIPS2026">github.com/buraksusam/AutoManifold_NeurIPS2026</a>
+  </div>
+</footer>
+
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<script>
+/* ---------- equations ---------- */
+window.addEventListener('DOMContentLoaded', () => {
+  const run = () => {
+    if (!window.renderMathInElement) return setTimeout(run, 60);
+    document.querySelectorAll('.eq').forEach(el => renderMathInElement(el, {
+      delimiters: [{ left: '$$', right: '$$', display: true }],
+      trust: ctx => ctx.command === '\\htmlClass', strict: false, throwOnError: false
+    }));
+  };
+  run();
+});
+
+/* ---------- sticky bar border ---------- */
+(() => {
+  const bar = document.getElementById('bar');
+  const on = () => bar.classList.toggle('scrolled', scrollY > 8);
+  addEventListener('scroll', on, { passive: true }); on();
+})();
+
+/* ---------- paper link placeholder ---------- */
+(() => {
+  const a = document.getElementById('paper-link');
+  if (a.getAttribute('aria-disabled') === 'true') a.addEventListener('click', e => e.preventDefault());
+})();
+
+/* ---------- hero point cloud ---------- */
+(() => {
+  const cv = document.getElementById('cloud');
+  const ctx = cv.getContext('2d');
+  const frame = cv.parentElement;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const caption = document.getElementById('cloud-caption');
+  const buttons = [...document.querySelectorAll('.priorities button')];
+
+  const CAPTIONS = {
+    raw: 'Points sampled on a curled 2-D sheet in 3-D, the kind of structure a manifold embedding has to unroll.',
+    balanced: '<b>No priority.</b> Auto (w/o) aims for good scores everywhere; on PBMC3k it has the best continuity (0.919) of all 12 methods.',
+    local: '<b>Local structure:</b> trustworthiness and continuity. Detail inside each group, less meaning between groups. Auto-T on PBMC3k: 0.879 vs 0.873 for the best baseline.',
+    global: '<b>Global distances:</b> Spearman ρ and stress. Far stays far. Auto-ρ on aging skin: ρ = 0.91 vs 0.52 for the best baseline.',
+    clusters: '<b>Cluster separation:</b> silhouette. Compact, clearly separate groups. Auto-Sil on kidney: 0.94 vs 0.15 for the best baseline.'
+  };
+  const COLORS = ['#0F8B8D', '#E4572E', '#F2A541', '#4C6EF5', '#A23B72', '#3BB273', '#8C6BD8', '#EC7FB0', '#2B90C0'];
+
+  // seeded RNG so the cloud is the same every visit
+  let s = 20261106;
+  const rand = () => { s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const gauss = () => { let u = 0; while (!u) u = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rand()); };
+
+  // cluster centres on the (u, v) sheet
+  const CENT = [[.08, .3], [.18, .74], [.31, .4], [.42, .8], [.52, .27], [.63, .64], [.75, .3], [.86, .72], [.94, .4]];
+  const SIG = [.04, .05, .055, .045, .06, .05, .045, .055, .04];
+  const WEIGHT = [1, 1.4, 1.1, .8, 1.6, 1.2, .9, 1.3, .7];
+  const K = CENT.length;
+  const N = innerWidth < 700 ? 1000 : 1700;
+  const wsum = WEIGHT.reduce((a, b) => a + b, 0);
+  const nearest = (u, v) => { let best = 0, bd = Infinity; CENT.forEach(([cu, cv], c) => { const d = (u - cu) ** 2 + (v - cv) ** 2; if (d < bd) { bd = d; best = c; } }); return best; };
+
+  // 74% of points sit in clusters (each with three sub-groups); the rest cover the sheet between them
+  const P = [];
+  const nClustered = Math.round(N * .74);
+  for (let c = 0; c < K; c++) {
+    const n = Math.round(nClustered * WEIGHT[c] / wsum);
+    const subs = [0, 1, 2].map(() => [gauss() * SIG[c] * .8, gauss() * SIG[c] * .8]);
+    for (let k = 0; k < n; k++) {
+      const sb = subs[Math.floor(rand() * 3)];
+      const nu = gauss() * SIG[c] * .5, nv = gauss() * SIG[c] * .5;
+      P.push({ c, bridge: false, su: sb[0], sv: sb[1], nu, nv,
+        u: Math.min(1, Math.max(0, CENT[c][0] + sb[0] + nu)), v: Math.min(1, Math.max(0, CENT[c][1] + sb[1] + nv)),
+        j: [gauss(), gauss(), gauss()] });
+    }
+  }
+  for (let k = 0; k < N - nClustered; k++) {
+    const u = rand(), v = rand(), c = nearest(u, v);
+    P.push({ c, bridge: true, su: 0, sv: 0, nu: u - CENT[c][0], nv: v - CENT[c][1], u, v, j: [gauss(), gauss(), gauss()] });
+  }
+  // draw order grouped by colour
+  P.sort((a, b) => a.c - b.c);
+  const n = P.length;
+
+  // 2-D layouts in abstract units
+  const rot = Array.from({ length: K }, () => rand() * Math.PI * 2);
+  const ringPos = Array.from({ length: K }, (_, c) => {
+    const r = Math.floor(c / 3), q = c % 3;
+    return [(q - 1) * .8 + (r % 2 ? .2 : -.1), (r - 1) * .62];
+  });
+  const localPos = [[-.95, .1], [-.58, .58], [-.48, -.32], [-.02, .52], [.04, -.46], [.3, .06], [.62, -.4], [.64, .52], [1.0, .05]];
+
+  const L = { balanced: [], local: [], global: [], clusters: [] };
+  for (const p of P) {
+    const c = p.c, cu = (CENT[c][0] - .5) * 2.4, cv = (CENT[c][1] - .5) * 1.5;
+    // global: the unrolled sheet itself, gaps and all
+    L.global.push([(p.u - .5) * 2.4, (p.v - .5) * 1.5]);
+    // clusters: one tight blob per group, far apart; in-between points absorbed
+    L.clusters.push(p.bridge
+      ? [ringPos[c][0] + p.j[0] * .035, ringPos[c][1] + p.j[1] * .035]
+      : [ringPos[c][0] + p.nu * 1.2, ringPos[c][1] + p.nv * 1.2]);
+    // local: each group magnified and turned, sub-groups pulled apart, gaps between groups arbitrary
+    const cr = Math.cos(rot[c]), sr = Math.sin(rot[c]);
+    let lx, ly;
+    if (p.bridge) {
+      const d = Math.hypot(p.nu, p.nv) || 1, rr = .2 + Math.abs(p.j[2]) * .05;
+      lx = p.nu / d * rr; ly = p.nv / d * rr;
+    } else { lx = p.su * 4 + p.nu * 2; ly = p.sv * 4 + p.nv * 2; }
+    L.local.push([localPos[c][0] + lx * cr - ly * sr, localPos[c][1] + lx * sr + ly * cr]);
+    // balanced: global arrangement kept, groups tightened, in-between points drawn toward their group
+    L.balanced.push(p.bridge
+      ? [cu + p.nu * 2.4 * .5, cv + p.nv * 1.5 * .5]
+      : [cu + (p.su * .6 + p.nu) * 1.6, cv + (p.sv * .6 + p.nv) * 1.6]);
+  }
+
+  let W = 0, H = 0, DPR = 1;
+  const fitted = {};
+  function fit() {
+    const r = frame.getBoundingClientRect();
+    DPR = Math.min(2, devicePixelRatio || 1);
+    W = r.width; H = r.height;
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    for (const k in L) {
+      const a = L[k];
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      for (const [x, y] of a) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      const pad = Math.max(24, W * .07);
+      const sc = Math.min((W - 2 * pad) / (x1 - x0), (H - 2 * pad - 14) / (y1 - y0));
+      const ox = (W - (x1 - x0) * sc) / 2 - x0 * sc, oy = (H - 14 - (y1 - y0) * sc) / 2 - y0 * sc;
+      fitted[k] = a.map(([x, y]) => [x * sc + ox, y * sc + oy]);
+    }
+  }
+
+  // 3-D swiss roll, rotating
+  const raw3 = P.map(p => {
+    const t = 1.5 * Math.PI + 3 * Math.PI * p.u;
+    return [t * Math.cos(t) + p.j[0] * .25, (p.v - .5) * 18 + p.j[1] * .25, t * Math.sin(t) + p.j[2] * .25];
+  });
+  const depth = new Float32Array(n);
+  function rawTarget(angle, out) {
+    const ca = Math.cos(angle), sa = Math.sin(angle), b = .95, cb = Math.cos(b), sb = Math.sin(b);
+    const sc = Math.min(W, H) / 34, cx = W / 2, cy = H / 2 - 6;
+    for (let i = 0; i < n; i++) {
+      const [x, y, z] = raw3[i];
+      const x1 = x * ca + z * sa, z1 = -x * sa + z * ca;
+      const y2 = y * cb - z1 * sb, z2 = y * sb + z1 * cb;
+      out[i * 2] = cx + x1 * sc; out[i * 2 + 1] = cy + y2 * sc * .8;
+      depth[i] = z2;
+    }
+  }
+
+  const cur = new Float32Array(n * 2), from = new Float32Array(n * 2), tgt = new Float32Array(n * 2);
+  let mode = reduce ? 'balanced' : 'raw', t0 = 0, animating = false, angle = .6, last = 0, visible = true, userPicked = false;
+  const DUR = 1300;
+  const delayOf = (i, m) => (m === 'raw' ? 0 : P[i].u * 650);
+  const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+  function targets() {
+    if (mode === 'raw') rawTarget(angle, tgt);
+    else { const f = fitted[mode]; for (let i = 0; i < n; i++) { tgt[i * 2] = f[i][0]; tgt[i * 2 + 1] = f[i][1]; } }
+  }
+
+  function draw(now) {
+    const k = Math.min(1, Math.max(0, (now - t0) / 900));
+    const rawMix = mode === 'raw' ? k : 0;
+    ctx.clearRect(0, 0, W, H);
+    const r = W < 500 ? 1.7 : 2.1;
+    let col = -1;
+    for (let i = 0; i < n; i++) {
+      if (P[i].c !== col) { col = P[i].c; ctx.fillStyle = COLORS[col]; }
+      const d = rawMix ? (depth[i] + 14) / 28 : 1;
+      ctx.globalAlpha = rawMix ? .35 + .55 * d * rawMix + (1 - rawMix) * .5 : .85;
+      ctx.beginPath();
+      ctx.arc(cur[i * 2], cur[i * 2 + 1], rawMix ? r * (.65 + .55 * d) : r, 0, 6.2832);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function frameLoop(now) {
+    const dt = last ? now - last : 16; last = now;
+    if (mode === 'raw' && !reduce) angle += dt * .00028;
+    targets();
+    let done = true;
+    for (let i = 0; i < n; i++) {
+      let p = (now - t0 - delayOf(i, mode)) / DUR;
+      if (reduce) p = 1;
+      p = p < 0 ? 0 : p > 1 ? 1 : p;
+      if (p < 1) done = false;
+      const e = ease(p);
+      cur[i * 2] = from[i * 2] + (tgt[i * 2] - from[i * 2]) * e;
+      cur[i * 2 + 1] = from[i * 2 + 1] + (tgt[i * 2 + 1] - from[i * 2 + 1]) * e;
+    }
+    draw(now);
+    animating = visible && !(done && mode !== 'raw');
+    if (mode === 'raw' && reduce) animating = false;
+    if (animating) requestAnimationFrame(frameLoop); else last = 0;
+  }
+  function kick() { if (!animating && visible) { animating = true; requestAnimationFrame(frameLoop); } }
+
+  function setMode(m, fromUser) {
+    if (fromUser) userPicked = true;
+    from.set(cur); mode = m; t0 = performance.now();
+    buttons.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
+    caption.innerHTML = CAPTIONS[m];
+    kick();
+  }
+
+  fit();
+  // start: points begin at their 3-D position (or the final layout when motion is reduced)
+  if (mode === 'raw') { rawTarget(angle, cur); } else { const f = fitted[mode]; for (let i = 0; i < n; i++) { cur[i * 2] = f[i][0]; cur[i * 2 + 1] = f[i][1]; } }
+  setMode(mode);
+  if (!reduce) setTimeout(() => { if (!userPicked) setMode('balanced'); }, 2600);
+
+  buttons.forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode, true)));
+
+  let rt;
+  new ResizeObserver(() => {
+    clearTimeout(rt);
+    rt = setTimeout(() => {
+      const oldW = W, oldH = H; fit();
+      if (mode !== 'raw') { const f = fitted[mode]; for (let i = 0; i < n; i++) { cur[i * 2] = f[i][0]; cur[i * 2 + 1] = f[i][1]; } from.set(cur); }
+      else if (oldW) { for (let i = 0; i < n; i++) { cur[i * 2] *= W / oldW; cur[i * 2 + 1] *= H / oldH; } }
+      animating = false; kick();
+    }, 80);
+  }).observe(frame);
+
+  new IntersectionObserver(es => { visible = es[0].isIntersecting && !document.hidden; if (visible) kick(); }).observe(frame);
+  document.addEventListener('visibilitychange', () => { visible = !document.hidden; if (visible) kick(); });
+})();
+
+/* ---------- pipeline tabs ---------- */
+(() => {
+  const tabs = [...document.querySelectorAll('.phase-tab')];
+  const select = t => {
+    tabs.forEach(x => {
+      const on = x === t;
+      x.setAttribute('aria-selected', String(on));
+      x.tabIndex = on ? 0 : -1;
+      document.getElementById(x.getAttribute('aria-controls')).hidden = !on;
+    });
+  };
+  tabs.forEach((t, i) => {
+    t.addEventListener('click', () => select(t));
+    t.addEventListener('keydown', e => {
+      const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (!d) return;
+      e.preventDefault();
+      const nx = tabs[(i + d + tabs.length) % tabs.length]; select(nx); nx.focus();
+    });
+  });
+})();
+
+/* ---------- results (Table 1 and 2 of the paper) ---------- */
+(() => {
+  const METHODS = ['t-SNE', 'UMAP', 'PaCMAP', 'Auto (w/o)', 'Auto-T', 'Auto-C', 'Auto-ρ', 'Auto-Sil', 'Auto-S', 'Auto-L', 'Auto-local', 'Auto-global'];
+  const SCORES = [
+    { k: 'T', name: 'Trustworthiness', low: false },
+    { k: 'C', name: 'Continuity', low: false },
+    { k: 'ρ', name: 'Spearman ρ', low: false },
+    { k: 'Sil', name: 'Silhouette', low: false },
+    { k: 'S', name: 'Stress', low: true },
+    { k: 'L', name: 'LOF', low: true }
+  ];
+  // rows follow the paper's Table 1 order: T, C, ρ, Sil, S, L
+  const TARGET = { 4: 0, 5: 1, 6: 2, 7: 3, 8: 4, 9: 5 }; // method column -> score row
+  const DATA = {
+    iris: { label: 'Iris', diff: 'easy', m: [
+      [0.9848,0.9810,0.9483,0.9865,0.9838,0.9858,0.9918,0.9200,0.9899,0.9866,0.9804,0.9907],
+      [0.9842,0.9837,0.9689,0.9888,0.9816,0.9843,0.9946,0.9247,0.9922,0.9883,0.9858,0.9930],
+      [0.8077,0.9602,0.7332,0.9629,0.8792,0.8845,0.9967,0.8535,0.9945,0.9297,0.9438,0.9927],
+      [0.6383,0.6056,0.3978,0.6000,0.6165,0.6031,0.5238,0.7810,0.5274,0.6320,0.6454,0.5402],
+      [0.5164,0.2205,0.5408,0.1689,0.3985,0.4769,0.0334,0.4730,0.0458,0.4527,0.2870,0.0734],
+      [1.0088,1.0093,1.0155,1.0131,1.0106,1.0129,1.0162,1.0146,1.0163,1.0080,1.0100,1.0166]] },
+    aging: { label: 'Aging skin', diff: 'moderate', m: [
+      [0.9783,0.9739,0.9710,0.9170,0.9793,0.9709,0.9073,0.8013,0.8127,0.9708,0.9797,0.8521],
+      [0.9744,0.9767,0.9727,0.9477,0.9727,0.9759,0.9482,0.9070,0.8791,0.9684,0.9731,0.8359],
+      [0.4830,0.4686,0.5203,0.5464,0.4312,0.4447,0.9075,0.0757,0.6440,0.4038,0.4617,0.3164],
+      [0.2345,0.2084,0.0893,-0.1309,0.2120,0.1987,-0.0965,0.8691,-0.1293,0.1326,0.1683,-0.3474],
+      [0.4882,0.5079,0.4746,0.5929,0.5503,0.5477,0.1956,0.7022,0.3825,0.5327,0.4904,0.4839],
+      [1.0162,1.0118,1.0192,1.0595,1.0157,1.0186,1.0092,1.0062,1.0078,1.0156,1.0403,1.0178]] },
+    pbmc3k: { label: 'PBMC3k', diff: 'moderate', m: [
+      [0.8727,0.8613,0.8627,0.8757,0.8794,0.8599,0.8645,0.8659,0.8570,0.8820,0.8680,0.8589],
+      [0.8978,0.8995,0.8953,0.9185,0.8924,0.8983,0.9056,0.8970,0.9004,0.9034,0.8889,0.9011],
+      [0.6812,0.6907,0.6978,0.7092,0.6233,0.6659,0.8552,0.5838,0.8365,0.6632,0.6680,0.8370],
+      [0.4245,0.3707,0.5320,0.5269,0.3311,0.7090,0.3876,0.5520,0.2409,0.4911,0.3585,0.2418],
+      [0.4265,0.4089,0.4074,1.2913,1.0298,1.3026,0.3191,0.9763,0.2901,1.1310,0.8945,0.3501],
+      [1.0087,1.0060,1.0133,1.0165,1.0090,1.0477,1.0135,1.0110,1.0067,1.0112,1.0129,1.0063]] },
+    kidney: { label: 'Kidney', diff: 'moderate', m: [
+      [0.9774,0.9824,0.9730,0.9843,0.9831,0.9817,0.9194,0.9199,0.9269,0.9841,0.9810,0.9273],
+      [0.9761,0.9857,0.9723,0.9812,0.9794,0.9775,0.9611,0.9637,0.9639,0.9860,0.9807,0.9663],
+      [0.5387,0.6399,0.5377,0.5183,0.5230,0.5345,0.8962,0.1990,0.9467,0.7210,0.4457,0.9467],
+      [0.0678,0.1461,0.0404,0.2306,0.2058,0.1064,-0.2730,0.9392,-0.2111,0.1330,-0.0376,-0.2500],
+      [0.4068,0.3836,0.4037,0.4544,0.4339,0.4465,0.2658,0.8035,0.1930,0.3645,0.4443,0.1747],
+      [1.0127,1.0112,1.0213,1.0162,1.0155,1.0187,1.0138,1.0272,1.0130,1.0132,1.0219,1.0127]] },
+    cortex: { label: 'Cortex', diff: 'hard', m: [
+      [0.9729,0.9627,0.9656,0.9562,0.9342,0.9590,0.9192,0.8050,0.9196,0.9442,0.9700,0.9285],
+      [0.9647,0.9629,0.9661,0.9710,0.9392,0.9520,0.9524,0.7087,0.9528,0.9543,0.9668,0.9620],
+      [0.6536,0.6805,0.6894,0.7353,0.6384,0.6154,0.9077,0.1578,0.9077,0.6220,0.6561,0.9107],
+      [-0.0154,-0.0234,-0.0203,-0.0413,-0.0673,-0.0097,-0.1745,0.5723,-0.1730,-0.0747,-0.0008,-0.1501],
+      [0.3556,0.3667,0.3372,0.3445,0.3993,0.4196,0.2676,0.4918,0.2678,0.3950,0.3633,0.2587],
+      [1.0118,1.0110,1.0199,1.0036,1.0037,1.0130,1.0068,1.0150,1.0067,1.0015,1.0133,1.0122]] },
+    fashion: { label: 'Fashion-MNIST', diff: 'hard', m: [
+      [0.9771,0.9584,0.9345,0.9675,0.9078,0.9699,0.9250,0.9170,0.9295,0.9758,0.9666,0.9370],
+      [0.9740,0.9810,0.9693,0.9742,0.9446,0.9670,0.9529,0.8211,0.9684,0.9654,0.9687,0.9767],
+      [0.7179,0.7552,0.8690,0.6949,0.5093,0.5833,0.9329,0.2825,0.9239,0.6305,0.6089,0.8766],
+      [0.1776,0.1339,-0.0074,0.1718,0.1704,0.1973,-0.0288,0.8388,-0.0059,0.1835,0.1577,0.0384],
+      [0.3248,0.3071,0.2730,0.3601,0.3874,0.4774,0.4428,0.6943,0.3131,0.3531,0.3543,0.2690],
+      [1.0159,1.0060,1.0292,1.0173,1.0180,1.0318,1.0146,1.0361,1.0091,1.0114,1.0235,1.0097]] }
+  };
+  const better = (a, b, low) => low ? a < b : a > b;
+  const fmt = v => (v < 0 ? '−' : '') + Math.abs(v).toFixed(3);
+  const bestBase = (row, low) => row.slice(0, 3).reduce((a, b) => better(b, a, low) ? b : a);
+
+  // scoreboard
+  const sb = document.getElementById('scoreboard');
+  const keys = Object.keys(DATA);
+  let html = '<div class="hd l" role="columnheader">Asked to improve</div>' +
+    keys.map(k => `<div class="hd" role="columnheader">${DATA[k].label}</div>`).join('') +
+    '<div class="hd" role="columnheader">Wins</div>';
+  const order = [6, 7, 8, 4, 9, 5]; // strongest first: ρ, Sil, S, T, L, C
+  for (const col of order) {
+    const r = TARGET[col], sc = SCORES[r];
+    let wins = 0;
+    const cells = keys.map(k => {
+      const row = DATA[k].m[r], v = row[col], b = bestBase(row, sc.low), w = better(v, b, sc.low);
+      if (w) wins++;
+      return `<div class="dot" role="cell"><i class="${w ? 'win' : ''}" title="${DATA[k].label}: ${METHODS[col]} ${fmt(v)} vs best baseline ${fmt(b)}" aria-label="${w ? 'beats' : 'does not beat'} best baseline (${fmt(v)} vs ${fmt(b)})"></i></div>`;
+    }).join('');
+    html += `<div class="row-name" role="rowheader">${sc.name} <small>${METHODS[col]}</small></div>${cells}<div class="tally" role="cell">${wins} / 6</div>`;
+  }
+  sb.innerHTML = html;
+
+  // dataset tabs + table 1
+  const tabsEl = document.getElementById('ds-tabs');
+  const t1 = document.getElementById('t1');
+  function renderT1(key) {
+    const M = DATA[key].m;
+    let h = '<thead><tr class="group"><th></th><th colspan="3">Tuned baselines</th><th colspan="9" class="ours sep">Generated by AutoManifold</th></tr><tr><th scope="col">Score</th>' +
+      METHODS.map((m, j) => `<th scope="col"${j === 3 ? ' class="sep"' : ''}>${m}</th>`).join('') + '</tr></thead><tbody>';
+    M.forEach((row, r) => {
+      const sc = SCORES[r];
+      const best = row.reduce((a, b) => better(b, a, sc.low) ? b : a);
+      const bb = bestBase(row, sc.low);
+      h += `<tr><th scope="row">${sc.name}<small>${sc.low ? '↓' : '↑'}</small></th>`;
+      row.forEach((v, j) => {
+        const cls = [];
+        if (j === 3) cls.push('sep');
+        if (v === best) cls.push('best');
+        if (j >= 3 && better(v, bb, sc.low)) cls.push('beats');
+        if (TARGET[j] === r) cls.push('target');
+        h += `<td${cls.length ? ` class="${cls.join(' ')}"` : ''}>${fmt(v)}</td>`;
+      });
+      h += '</tr>';
+    });
+    t1.innerHTML = h + '</tbody>';
+  }
+  keys.forEach((k, i) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', String(k === 'cortex'));
+    b.innerHTML = `${DATA[k].label}<span class="diff">${DATA[k].diff}</span>`;
+    b.addEventListener('click', () => {
+      tabsEl.querySelectorAll('button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
+      renderT1(k);
+    });
+    tabsEl.appendChild(b);
+  });
+  renderT1('cortex');
+
+  // table 2 (ablation on pbmc3k)
+  const A_COLS = ['t-SNE tuned', 'SingleLLM', 'NoSkel-Agents', 'AutoManifold'];
+  const A = [ // rows: T, C, ρ, S, Sil, L  (paper order)
+    ['Trustworthiness', false, [0.8886,0.8614,0.8433,0.8645], [0.8565,0.8075,0.8584,0.8570]],
+    ['Continuity', false, [0.9197,0.9140,0.8786,0.9056], [0.8757,0.8174,0.9012,0.9004]],
+    ['Spearman ρ', false, [0.6845,0.8766,0.7944,0.8552], [0.6185,0.6750,0.8362,0.8365]],
+    ['Stress', true, [0.4680,0.8175,0.4450,0.3191], [0.3904,0.5162,0.2904,0.2901]],
+    ['Silhouette', false, [0.4957,0.3443,0.4240,0.3876], [0.3023,0.1762,0.2414,0.2409]],
+    ['LOF', true, [1.0207,1.0176,1.0350,1.0135], [1.0079,1.0249,1.0067,1.0067]]
+  ];
+  let h2 = '<thead><tr class="group"><th></th><th colspan="4" class="blk">Asked to improve Spearman ρ</th><th colspan="4" class="blk sep">Asked to improve stress</th></tr><tr><th scope="col">Score</th>' +
+    A_COLS.map(c => `<th scope="col">${c}</th>`).join('') + A_COLS.map((c, j) => `<th scope="col"${j === 0 ? ' class="sep"' : ''}>${c}</th>`).join('') + '</tr></thead><tbody>';
+  for (const [name, low, a, b] of A) {
+    const ba = a.reduce((x, y) => better(y, x, low) ? y : x), bs = b.reduce((x, y) => better(y, x, low) ? y : x);
+    const tgtA = name === 'Spearman ρ', tgtS = name === 'Stress';
+    h2 += `<tr><th scope="row">${name}<small>${low ? '↓' : '↑'}</small></th>` +
+      a.map(v => `<td class="${[v === ba ? 'win best' : '', tgtA ? 'target' : ''].join(' ').trim()}">${fmt(v)}</td>`).join('') +
+      b.map((v, j) => `<td class="${[j === 0 ? 'sep' : '', v === bs ? 'win best' : '', tgtS ? 'target' : ''].join(' ').trim()}">${fmt(v)}</td>`).join('') + '</tr>';
+  }
+  document.getElementById('t2').innerHTML = h2 + '</tbody>';
+})();
+
+/* ---------- copy buttons ---------- */
+document.querySelectorAll('.copy').forEach(b => b.addEventListener('click', async () => {
+  const text = document.getElementById(b.dataset.copy).innerText;
+  try { await navigator.clipboard.writeText(text); b.textContent = 'Copied'; }
+  catch { b.textContent = 'Select and copy'; }
+  setTimeout(() => (b.textContent = 'Copy'), 1600);
+}));
+</script>
+</body>
+</html>

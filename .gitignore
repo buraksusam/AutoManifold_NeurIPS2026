@@ -36,3 +36,6 @@ env/
 .claude/
 .agents/
 .superpowers/
+
+# --- Project website (GitHub Pages, served from docs/) -----------------------
+!docs/index.html
