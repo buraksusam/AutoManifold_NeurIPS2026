@@ -41,10 +41,12 @@ class LLMConfig:
             env_map = {
                 "openai": "OPENAI_API_KEY",
                 "anthropic": "ANTHROPIC_API_KEY",
-                "google": "GOOGLE_API_KEY",
+                "google": "GEMINI_API_KEY",
                 "deepseek": "DEEPSEEK_API_KEY",
             }
             self.api_key = os.getenv(env_map.get(self.provider, "OPENAI_API_KEY"))
+            if self.api_key is None and self.provider == "google":
+                self.api_key = os.getenv("GOOGLE_API_KEY")
 
 
 @dataclass

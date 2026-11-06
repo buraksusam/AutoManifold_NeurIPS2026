@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-main.py — CLI entry point for the DR Design Pipeline.
+main.py — CLI entry point for AutoManifold (Optimization mode).
 
 Usage:
     python main.py --data data.csv --labels labels.csv \\
@@ -17,6 +17,13 @@ import os
 # Force Numba's threading layer to a fork-safe backend BEFORE any Numba-backed
 # import (umap, pacmap). Avoids TBB "fork from non-main thread" warnings.
 os.environ.setdefault("NUMBA_THREADING_LAYER", "workqueue")
+
+# Load API keys from a project-local .env if present (shell exports still win).
+try:
+    from dotenv import load_dotenv as _load_dotenv
+    _load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"), override=False)
+except Exception:
+    pass
 
 import argparse
 import json
@@ -35,7 +42,7 @@ from pipeline.config import (
     PipelineConfig,
 )
 from pipeline.planner import Planner
-from pipeline.datasets import get_dataset, list_datasets, DATASETS
+from pipeline.datasets import DATASETS, DatasetUnavailableError, get_dataset, list_datasets
 
 
 def parse_args() -> argparse.Namespace:
@@ -263,7 +270,11 @@ def main():
     label_names = None
 
     if args.dataset:
-        data, labels, ln_list, ds_info = get_dataset(args.dataset)
+        try:
+            data, labels, ln_list, ds_info = get_dataset(args.dataset)
+        except DatasetUnavailableError as exc:
+            print(f"ERROR: {exc}\n       See the Datasets section of README.md.", file=sys.stderr)
+            sys.exit(1)
         # Convert list → dict expected by planner
         label_names = {i: name for i, name in enumerate(ln_list)}
         logging.info("Dataset: %s  |  %s", ds_info["name"], ds_info["description"])

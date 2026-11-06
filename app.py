@@ -192,6 +192,24 @@ def _run_pipeline(
         PlannerClass = getattr(importlib.import_module(module_name), class_name)
         q.put({"type": "log", "data": {"line": f"Using {display_name} planner", "level": "info"}})
 
+        config = PipelineConfig(
+            llm=LLMConfig(
+                provider=cfg["provider"],
+                model=cfg["model"],
+                api_key=cfg["api_key"],
+                temperature=0.4,
+            ),
+            convergence=ConvergenceConfig(
+                max_iterations=cfg["max_iter"],
+                quality_score_target=cfg["quality_target"],
+                enable_iterative_optimization=cfg.get("iterative_optimization", True),
+            ),
+            patch=PatchConfig(),
+            metrics=MetricsConfig(),
+            default_dr_method=cfg["dr_method"],
+            primary_goal=cfg.get("primary_goal", "balance both"),
+        )
+
         planner = PlannerClass(config)
 
         # Auto-Skills: stream per-skill-turn breadcrumbs to the UI log
@@ -240,6 +258,7 @@ def _run_pipeline(
         tb = traceback.format_exc()
         run["status"] = "error"
         run["error"] = str(exc)
+        print(f"[run {run_id}] failed:\n{tb}", file=orig_stderr)
         q.put({"type": "error", "data": {"message": str(exc), "traceback": tb}})
 
     finally:

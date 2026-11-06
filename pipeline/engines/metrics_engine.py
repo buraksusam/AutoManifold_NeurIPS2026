@@ -19,6 +19,9 @@ from scipy.stats import spearmanr
 from sklearn.metrics import silhouette_score
 from sklearn.neighbors import LocalOutlierFactor, NearestNeighbors
 
+# np.trapz was renamed np.trapezoid in NumPy 2.0 (trapz is deprecated).
+_trapezoid = getattr(np, "trapezoid", None) or np.trapz
+
 logger = logging.getLogger(__name__)
 
 
@@ -224,8 +227,8 @@ class QuantitativeAnalystEngine:
         else:
             xs = np.asarray(ks, dtype=float)
             span = xs[-1] - xs[0]
-            t_auc = float(np.trapz(np.asarray(t_curve), xs) / span)
-            c_auc = float(np.trapz(np.asarray(c_curve), xs) / span)
+            t_auc = float(_trapezoid(np.asarray(t_curve), xs) / span)
+            c_auc = float(_trapezoid(np.asarray(c_curve), xs) / span)
 
         return {
             "k_values": ks,

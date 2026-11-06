@@ -18,6 +18,11 @@ import matplotlib.patheffects as pe
 import numpy as np
 from .config import OUTPUT_ROOT
 
+# Axes.boxplot(labels=...) was renamed tick_labels in matplotlib 3.9 and removed later.
+_BOXPLOT_LABELS_KW = ("tick_labels"
+                      if tuple(int(v) for v in matplotlib.__version__.split(".")[:2]) >= (3, 9)
+                      else "labels")
+
 
 # ── Shared palette ──────────────────────────────────────────────────────────
 _PALETTE = [
@@ -567,7 +572,7 @@ def plot_class_distortion_summary(
 
     # ── Panel 1: Composite distortion box plot ──
     ax = axes[0]
-    bp = ax.boxplot(class_distortion, labels=names, patch_artist=True, showfliers=False)
+    bp = ax.boxplot(class_distortion, **{_BOXPLOT_LABELS_KW: names}, patch_artist=True, showfliers=False)
     for i, patch in enumerate(bp["boxes"]):
         patch.set_facecolor(_PALETTE[i % len(_PALETTE)])
         patch.set_alpha(0.7)

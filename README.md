@@ -18,6 +18,10 @@ pip install -r requirements.txt
 cp .env.example .env   # then add the API key(s) for your LLM provider
 ```
 
+On Intel Macs, recent `llvmlite` releases (a UMAP dependency) ship no prebuilt
+wheels; if the install fails while building `llvmlite`, use
+`pip install --prefer-binary -r requirements.txt`.
+
 Supported LLM providers: OpenAI, Anthropic, Google (Gemini) and DeepSeek.
 Keys are read from `.env` or from the environment (`OPENAI_API_KEY`,
 `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `DEEPSEEK_API_KEY`).

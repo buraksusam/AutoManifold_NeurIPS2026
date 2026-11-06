@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Convenience launcher for the DR Design Pipeline web UI.
+Convenience launcher for the AutoManifold web UI.
 
 Usage:
     python serve.py           # port 8000
@@ -19,7 +19,7 @@ p.add_argument("--reload", action="store_true", help="Enable auto-reload (dev mo
 args = p.parse_args()
 
 url = f"http://localhost:{args.port}"
-print(f"\n  DR Design Pipeline  ·  {url}\n")
+print(f"\n  AutoManifold  ·  {url}\n")
 
 if args.open:
     import threading, time, webbrowser
